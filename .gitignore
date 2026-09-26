@@ -1,0 +1,6 @@
+node_modules
+dist
+*.zip
+.DS_Store
+# Internal planning doc — not published
+PRD*.md
