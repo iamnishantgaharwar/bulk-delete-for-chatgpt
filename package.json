@@ -3,6 +3,22 @@
   "version": "1.0.0",
   "private": true,
   "description": "Select multiple ChatGPT chats in the sidebar and delete them in one action.",
+  "author": "Nishant Gaharwar <iamnishantgaharwar@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/iamnishantgaharwar/bulk-delete-for-chatgpt#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iamnishantgaharwar/bulk-delete-for-chatgpt.git"
+  },
+  "bugs": {
+    "url": "https://github.com/iamnishantgaharwar/bulk-delete-for-chatgpt/issues"
+  },
+  "keywords": [
+    "chrome-extension",
+    "chatgpt",
+    "bulk-delete",
+    "manifest-v3"
+  ],
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
