@@ -35,6 +35,7 @@ Esc exits select mode. You can switch the extension on or off from its toolbar p
 | `src/content/app.ts` | Select mode, row checkboxes, action bar, confirm/progress/summary modal (Shadow DOM) |
 | `src/content/deleter.ts` | Sequential queue: API delete (primary), UI-click automation (fallback), backoff, cancel |
 | `src/content/queue-store.ts` | Saves the pending queue to `chrome.storage.local` so an interrupted run can be resumed |
+| `src/styles/ui.css`, `theme.css` | Tailwind entry and light/dark color tokens for the injected UI |
 | `src/content/sidebar.ts` | Finds chat rows and reads their conversation IDs from `/c/<id>` links |
 | `src/popup/*` | On/off toggle and how-to |
 | `src/background.ts` | Sets defaults on install |
@@ -43,6 +44,7 @@ Esc exits select mode. You can switch the extension on or off from its toolbar p
 - **Safety:** chats are deleted only by the conversation IDs captured when you selected them. Requests go one at a time with a 500 ms gap. HTTP 429 and 5xx get exponential backoff (and `Retry-After` is honored). On 401/403 the run pauses and asks you to reload.
 - **Scope (v1):** only top-level chats (`/c/<id>`) get checkboxes. Project chats (`/g/…/c/<id>`) are shown without them. Pinned chats are excluded through `selectors.excludedRow`; confirm those selectors on the live DOM.
 - **Background runs:** deletion stays in the content script, not the service worker. The requests then come from the page with its own session, which avoids cross-origin and bot-protection problems, and Chrome's service-worker idle limit doesn't apply. The queue stays alive while you move between chats inside ChatGPT, and a heartbeat keeps a second tab from grabbing a queue that's still running.
+- **Styling:** Tailwind CSS v4 is compiled at build time (`scripts/build.mjs`) and loaded into each Shadow DOM root as one shared stylesheet, so no styles leak into or out of ChatGPT. Colors use semantic tokens (`bg-surface`, `text-fg`, `border-line`, `bg-danger`) that follow ChatGPT's `html.dark` class. Because Chrome ignores Tailwind's `@property` rules inside shadow roots, the build also writes their default values out as plain CSS.
 - **Sidebar:** deleted rows are hidden with a CSS attribute, not removed, so React's DOM stays intact. A MutationObserver re-attaches checkboxes as the list lazy-loads.
 
 ## Privacy

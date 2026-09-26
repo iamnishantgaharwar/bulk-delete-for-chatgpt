@@ -52,13 +52,13 @@ export function findLinkById(id: string): HTMLAnchorElement | null {
   return getChatRows().find((r) => r.eligible && r.id === id)?.link ?? null;
 }
 
-/** Nearest scrollable ancestor of the chat list. */
-export function findScrollContainer(): HTMLElement | null {
+/** Nearest scrollable ancestor of the chat list (optionally only if it currently overflows). */
+export function findScrollContainer(requireOverflow = true): HTMLElement | null {
   const link = document.querySelector<HTMLElement>(CONFIG.selectors.chatLink);
   let el = link?.parentElement ?? null;
   while (el && el !== document.body) {
     const { overflowY } = getComputedStyle(el);
-    if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight) return el;
+    if ((overflowY === 'auto' || overflowY === 'scroll') && (!requireOverflow || el.scrollHeight > el.clientHeight)) return el;
     el = el.parentElement;
   }
   return null;

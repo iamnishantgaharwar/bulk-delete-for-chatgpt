@@ -1,0 +1,32 @@
+@import "tailwindcss" source(none);
+@source "./popup.html";
+
+@theme inline {
+  --color-surface: var(--cbd-surface);
+  --color-surface-2: var(--cbd-surface-2);
+  --color-fg: var(--cbd-fg);
+  --color-muted: var(--cbd-muted);
+  --color-line: var(--cbd-line);
+  --color-ring: var(--cbd-ring);
+  --color-success: var(--cbd-success);
+}
+
+:root {
+  --cbd-surface: #ffffff;
+  --cbd-surface-2: #f4f4f4;
+  --cbd-fg: #0d0d0d;
+  --cbd-muted: #6b6b73;
+  --cbd-line: #e5e5e5;
+  --cbd-ring: #2f7cf6;
+  --cbd-success: #10a37f;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --cbd-surface: #212121;
+    --cbd-surface-2: #2f2f2f;
+    --cbd-fg: #ececec;
+    --cbd-muted: #a3a3ab;
+    --cbd-line: #3d3d3d;
+    --cbd-ring: #5b9bff;
+  }
+}

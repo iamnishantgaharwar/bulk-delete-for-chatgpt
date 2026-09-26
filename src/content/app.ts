@@ -1,11 +1,20 @@
 import { CONFIG, queryFirst } from '../config';
 import { runDeletion, type ChatRef, type FailedChat, type RunResult } from './deleter';
-import { CHECK_SVG, h, shadowHost } from './dom';
+import { btn, h, icon, shadowHost } from './dom';
 import { clearQueue, loadStaleQueue, saveQueue } from './queue-store';
 import { currentChatId, findScrollContainer, getChatRows, rowElement, sidebarNav, type ChatRow } from './sidebar';
-import { APP_CSS, CHECKBOX_CSS, GLOBAL_CSS, TOGGLE_CSS } from './styles';
+import { GLOBAL_CSS } from './styles';
 
 const OBSERVE: MutationObserverInit = { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] };
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+interface RunView {
+  counter: HTMLElement;
+  fill: HTMLElement;
+  current: HTMLElement;
+  cancelBtn: HTMLButtonElement;
+}
 
 export class BulkDeleteApp {
   private selectMode = false;
@@ -28,20 +37,25 @@ export class BulkDeleteApp {
   private currentTitle = '';
   private heartbeat: number | undefined;
   private panelMinimized = false;
+  private runView: RunView | null = null;
 
   private observer: MutationObserver | null = null;
   private scheduled = false;
   private globalStyle: HTMLStyleElement | null = null;
   private toggleHost: HTMLElement | null = null;
   private toggleBtn: HTMLButtonElement | null = null;
+  private toggleLabel: HTMLSpanElement | null = null;
   private appHost: HTMLElement | null = null;
   private bar!: HTMLDivElement;
   private countEl!: HTMLSpanElement;
   private selectAllBtn!: HTMLButtonElement;
   private clearBtn!: HTMLButtonElement;
   private deleteBtn!: HTMLButtonElement;
+  private deleteLabel!: HTMLSpanElement;
   private loadOlderBtn!: HTMLButtonElement;
+  private loadOlderLabel!: HTMLSpanElement;
   private filterInput!: HTMLInputElement;
+  private filterClearBtn!: HTMLButtonElement;
   private modalLayer!: HTMLDivElement;
   private panel!: HTMLDivElement;
 
@@ -81,7 +95,8 @@ export class BulkDeleteApp {
     window.removeEventListener('pagehide', this.onPageHide);
     document.documentElement.removeAttribute('data-cbd-select');
     document.querySelectorAll('.cbd-cb').forEach((el) => el.remove());
-    for (const attr of ['data-cbd-id', 'data-cbd-selected', 'data-cbd-dim', 'data-cbd-pending']) {
+    document.documentElement.style.removeProperty('--cbd-bar-space');
+    for (const attr of ['data-cbd-id', 'data-cbd-selected', 'data-cbd-dim', 'data-cbd-pending', 'data-cbd-scroll-pad']) {
       document.querySelectorAll(`[${attr}]`).forEach((el) => el.removeAttribute(attr));
     }
     // Keep data-cbd-deleted rows hidden until ChatGPT re-renders them away, so
@@ -93,32 +108,79 @@ export class BulkDeleteApp {
   // ---- building UI --------------------------------------------------------
 
   private buildApp() {
-    const { host, root } = shadowHost('div', APP_CSS, 'cbd-root');
+    const { host, root } = shadowHost('div', 'cbd-root');
     this.appHost = host;
 
-    this.countEl = h('span', { class: 'count' }, '0 selected');
-    this.loadOlderBtn = h('button', { class: 'link-btn', title: 'Scroll the sidebar to load older chats', onclick: () => this.toggleAutoScroll() }, 'Load older chats');
+    this.countEl = h('span', { class: 'text-[15px] font-semibold tabular-nums' }, '0');
+    this.clearBtn = h('button', { class: `${btn.ghost} px-2.5 py-1`, onclick: () => this.clearSelection() }, 'Clear');
+
     this.filterInput = h('input', {
       type: 'text',
-      placeholder: 'Filter by title…',
+      placeholder: 'Filter by title',
       'aria-label': 'Filter chats by title',
-      oninput: () => {
-        this.filter = this.filterInput.value.trim().toLowerCase();
-        this.refresh();
-      },
+      class: 'min-w-0 flex-1 bg-transparent text-[13px] text-fg outline-none placeholder:text-muted',
+      oninput: () => this.setFilter(this.filterInput.value),
     });
-    this.selectAllBtn = h('button', { onclick: () => this.selectAllVisible() }, 'Select all visible');
-    this.clearBtn = h('button', { onclick: () => this.clearSelection() }, 'Clear');
-    this.deleteBtn = h('button', { class: 'danger grow', onclick: () => this.openConfirm() }, 'Delete');
+    this.filterClearBtn = h('button', {
+      class: `${btn.icon} size-5`,
+      'aria-label': 'Clear filter',
+      hidden: true,
+      onclick: () => {
+        this.setFilter('');
+        this.filterInput.focus();
+      },
+    }, icon('x', 'size-3.5'));
+
+    this.selectAllBtn = h('button', {
+      class: `${btn.secondary} flex-1`,
+      title: 'Select every chat currently shown (Ctrl/⌘ A)',
+      onclick: () => this.selectAllVisible(),
+    }, 'Select all');
+    this.loadOlderLabel = h('span', {}, 'Older');
+    this.loadOlderBtn = h('button', {
+      class: btn.secondary,
+      title: 'Scroll the sidebar to load older chats',
+      onclick: () => this.toggleAutoScroll(),
+    }, icon('arrowDown', 'size-3.5'), this.loadOlderLabel);
+    this.deleteLabel = h('span', {}, 'Delete');
+    this.deleteBtn = h('button', { class: `${btn.danger} w-full py-2`, onclick: () => this.openConfirm() }, icon('trash'), this.deleteLabel);
 
     this.bar = h(
       'div',
-      { class: 'bar', role: 'toolbar', 'aria-label': 'Bulk delete', hidden: true },
-      h('div', { class: 'row' }, h('span', { class: 'grow' }, this.countEl), this.loadOlderBtn),
-      this.filterInput,
-      h('div', { class: 'row' }, this.selectAllBtn, this.clearBtn, this.deleteBtn),
+      {
+        class: 'animate-in fixed bottom-3 z-[2147483000] flex flex-col gap-2.5 rounded-2xl border border-line bg-surface p-3 shadow-float',
+        role: 'toolbar',
+        'aria-label': 'Bulk delete',
+        hidden: true,
+      },
+      h(
+        'div',
+        { class: 'flex items-center justify-between gap-2 pl-1' },
+        h('div', { class: 'flex items-baseline gap-1.5' }, this.countEl, h('span', { class: 'text-[13px] text-muted' }, 'selected')),
+        this.clearBtn,
+      ),
+      h(
+        'label',
+        {
+          class:
+            'flex items-center gap-2 rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-muted ' +
+            'focus-within:outline-2 focus-within:outline-ring',
+        },
+        icon('search', 'size-4'),
+        this.filterInput,
+        this.filterClearBtn,
+      ),
+      h('div', { class: 'flex gap-2' }, this.selectAllBtn, this.loadOlderBtn),
+      this.deleteBtn,
     );
-    this.panel = h('div', { class: 'panel', role: 'status', 'aria-live': 'polite', hidden: true });
+    this.panel = h('div', {
+      class:
+        'group animate-in fixed right-4 bottom-4 z-[2147483000] w-80 max-w-[calc(100vw-2rem)] overflow-hidden ' +
+        'rounded-2xl border border-line bg-surface shadow-float data-min:w-64',
+      role: 'status',
+      'aria-live': 'polite',
+      hidden: true,
+    });
     this.modalLayer = h('div');
     root.append(this.bar, this.panel, this.modalLayer);
     document.body.append(host);
@@ -126,25 +188,37 @@ export class BulkDeleteApp {
 
   private ensureToggle() {
     if (!this.toggleHost) {
-      const { host, root } = shadowHost('span', TOGGLE_CSS, 'cbd-toggle-host');
-      this.toggleBtn = h('button', { 'aria-pressed': 'false', title: 'Select chats to delete (Esc to exit)', onclick: () => this.setSelectMode(!this.selectMode) });
+      const { host, root } = shadowHost('span', 'cbd-toggle-host');
+      this.toggleLabel = h('span', {}, 'Select chats');
+      this.toggleBtn = h('button', {
+        class:
+          'flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[14px] text-fg transition-colors ' +
+          'hover:bg-surface-2 aria-pressed:bg-surface-2 aria-pressed:font-medium ' +
+          'focus-visible:outline-2 focus-visible:outline-ring ' +
+          'data-floating:border data-floating:border-line data-floating:bg-surface data-floating:px-3 data-floating:shadow-float',
+        'aria-pressed': 'false',
+        title: 'Select chats to delete (Esc to exit)',
+        onclick: () => this.setSelectMode(!this.selectMode),
+      }, icon('listCheck', 'size-[18px] text-muted'), this.toggleLabel);
       root.append(this.toggleBtn);
       this.toggleHost = host;
     }
     this.toggleBtn!.setAttribute('aria-pressed', String(this.selectMode));
-    this.toggleBtn!.textContent = this.selectMode ? '✓ Done' : '☐ Select chats';
+    this.toggleLabel!.textContent = this.selectMode ? 'Done selecting' : 'Select chats';
 
     const anchor = queryFirst<HTMLElement>(CONFIG.selectors.toggleAnchor);
+    let floating = false;
     if (anchor?.parentElement) {
       if (this.toggleHost.nextElementSibling !== anchor) anchor.before(this.toggleHost);
-      this.toggleHost.classList.remove('cbd-floating');
     } else if (document.querySelector(CONFIG.selectors.chatLink)) {
       // No known anchor: float the toggle near the sidebar instead.
       if (this.toggleHost.parentElement !== document.body) document.body.append(this.toggleHost);
-      this.toggleHost.classList.add('cbd-floating');
+      floating = true;
     } else {
       this.toggleHost.remove();
     }
+    this.toggleHost.classList.toggle('cbd-floating', floating);
+    setAttr(this.toggleBtn!, 'data-floating', floating);
   }
 
   // ---- sidebar sync -------------------------------------------------------
@@ -190,17 +264,29 @@ export class BulkDeleteApp {
     setAttr(rowEl, 'data-cbd-pending', pending.has(id));
     if (link.getAttribute('data-cbd-id') !== id) link.setAttribute('data-cbd-id', id);
     if (!cb) {
-      const { host, root } = shadowHost('span', CHECKBOX_CSS);
+      const { host, root } = shadowHost('span');
       host.className = 'cbd-cb';
-      const box = h('span', { class: 'box', role: 'checkbox' });
-      box.innerHTML = CHECK_SVG;
-      root.append(box);
+      root.append(
+        h(
+          'span',
+          {
+            class:
+              'group grid size-4 place-items-center rounded-[5px] border-[1.5px] border-muted transition-colors ' +
+              'data-checked:border-fg data-checked:bg-fg',
+            role: 'checkbox',
+          },
+          icon('check', 'size-3 text-surface invisible group-data-checked:visible', 3.5),
+        ),
+      );
       link.prepend(host);
       cb = host;
     }
     const checked = this.selected.has(id);
-    setAttr(cb, 'data-checked', checked);
-    cb.shadowRoot?.querySelector('.box')?.setAttribute('aria-checked', String(checked));
+    const box = cb.shadowRoot?.querySelector('[role="checkbox"]');
+    if (box) {
+      setAttr(box, 'data-checked', checked);
+      box.setAttribute('aria-checked', String(checked));
+    }
     setAttr(rowEl, 'data-cbd-selected', this.selectMode && checked);
     setAttr(rowEl, 'data-cbd-dim', this.selectMode && !!this.filter && !title.toLowerCase().includes(this.filter));
   }
@@ -220,13 +306,15 @@ export class BulkDeleteApp {
   private updateBar() {
     this.bar.hidden = !this.selectMode;
     if (!this.selectMode) return;
+    this.reserveSidebarSpace();
     const n = this.selected.size;
-    this.countEl.textContent = `${n} selected`;
+    this.countEl.textContent = String(n);
     this.deleteBtn.disabled = n === 0;
-    this.deleteBtn.textContent = n ? `Delete ${n}` : 'Delete';
+    this.deleteLabel.textContent = n ? `Delete ${plural(n, 'chat')}` : 'Delete';
     this.clearBtn.disabled = n === 0;
-    this.selectAllBtn.textContent = this.filter ? 'Select matches' : 'Select all visible';
-    this.loadOlderBtn.textContent = this.autoScrolling ? 'Stop loading' : 'Load older chats';
+    this.selectAllBtn.textContent = this.filter ? 'Select matches' : 'Select all';
+    this.loadOlderLabel.textContent = this.autoScrolling ? 'Stop' : 'Older';
+    this.filterClearBtn.hidden = !this.filter;
 
     // Sit at the bottom of the sidebar when it's open; otherwise bottom-left of the page.
     const nav = sidebarNav();
@@ -237,6 +325,20 @@ export class BulkDeleteApp {
     } else {
       this.bar.style.left = '12px';
       this.bar.style.width = '280px';
+    }
+  }
+
+  /** Pads the sidebar's scroll area so no chat row is stuck behind the action bar. */
+  private reserveSidebarSpace() {
+    const scroller = findScrollContainer(false);
+    if (!scroller) return;
+    if (!scroller.hasAttribute('data-cbd-scroll-pad')) {
+      document.querySelectorAll('[data-cbd-scroll-pad]').forEach((el) => el.removeAttribute('data-cbd-scroll-pad'));
+      scroller.setAttribute('data-cbd-scroll-pad', '');
+    }
+    const space = `${this.bar.offsetHeight + 24}px`;
+    if (document.documentElement.style.getPropertyValue('--cbd-bar-space') !== space) {
+      document.documentElement.style.setProperty('--cbd-bar-space', space);
     }
   }
 
@@ -253,6 +355,12 @@ export class BulkDeleteApp {
       this.filterInput.value = '';
       this.autoScrolling = false;
     }
+    this.refresh();
+  }
+
+  private setFilter(value: string) {
+    this.filterInput.value = value;
+    this.filter = value.trim().toLowerCase();
     this.refresh();
   }
 
@@ -382,21 +490,25 @@ export class BulkDeleteApp {
     const n = queue.length;
     const typed = n > CONFIG.typedConfirmThreshold;
     const deleteBtn = h('button', {
-      class: 'danger',
+      class: btn.danger,
       disabled: typed,
       onclick: () => {
         this.closeConfirm();
         this.setSelectMode(false); // hand the sidebar back so ChatGPT can be used during the run
         this.enqueue(queue);
       },
-    }, `Delete ${n}`);
-    const cancelBtn = h('button', { onclick: () => this.closeConfirm() }, 'Cancel');
+    }, `Delete ${plural(n, 'chat')}`);
+    const cancelBtn = h('button', { class: btn.secondary, onclick: () => this.closeConfirm() }, 'Cancel');
     const input = typed
       ? h('input', {
           type: 'text',
           placeholder: CONFIG.typedConfirmWord,
           'aria-label': `Type ${CONFIG.typedConfirmWord} to confirm`,
           autocomplete: 'off',
+          spellcheck: 'false',
+          class:
+            'w-full rounded-xl border border-line bg-surface-2 px-3 py-2 font-mono text-[13px] tracking-wider text-fg ' +
+            'outline-none placeholder:text-muted/60 focus:outline-2 focus:outline-ring',
           oninput: (e: Event) => {
             deleteBtn.disabled = (e.target as HTMLInputElement).value.trim() !== CONFIG.typedConfirmWord;
           },
@@ -408,16 +520,42 @@ export class BulkDeleteApp {
 
     const modal = h(
       'div',
-      { class: 'modal', role: 'dialog', 'aria-modal': 'true' },
-      h('h2', {}, `Delete ${n} chat${n === 1 ? '' : 's'}?`),
-      h('ul', { class: 'list' }, ...queue.map((c) => h('li', { title: c.title }, c.title))),
-      h('div', { class: 'warn' }, 'This cannot be undone.'),
-      h('div', { class: 'muted' }, 'Deletion runs in the background — you can keep using ChatGPT.'),
-      ...(input ? [h('label', { class: 'muted' }, `Type ${CONFIG.typedConfirmWord} to confirm`), input] : []),
-      h('div', { class: 'actions' }, cancelBtn, deleteBtn),
+      {
+        class:
+          'animate-in flex max-h-[min(640px,100%)] w-[min(440px,100%)] flex-col gap-4 rounded-3xl border border-line ' +
+          'bg-surface p-6 text-fg shadow-float',
+        role: 'dialog',
+        'aria-modal': 'true',
+        'aria-labelledby': 'cbd-confirm-title',
+      },
+      h(
+        'div',
+        { class: 'flex gap-3.5' },
+        h('div', { class: 'grid size-10 shrink-0 place-items-center rounded-full bg-danger-soft text-danger' }, icon('trash', 'size-5')),
+        h(
+          'div',
+          { class: 'flex flex-col gap-1' },
+          h('h2', { id: 'cbd-confirm-title', class: 'text-[17px] font-semibold' }, `Delete ${plural(n, 'chat')}?`),
+          h('p', { class: 'text-[13px] text-muted' }, 'This can’t be undone. Deletion runs in the background, so you can keep using ChatGPT.'),
+        ),
+      ),
+      h(
+        'ul',
+        { class: 'max-h-64 min-h-12 divide-y divide-line overflow-auto rounded-xl border border-line' },
+        ...queue.map((c) => h('li', { class: 'truncate px-3 py-2 text-[13px]', title: c.title }, c.title)),
+      ),
+      input
+        ? h(
+            'label',
+            { class: 'flex flex-col gap-1.5 text-[13px] text-muted' },
+            h('span', {}, 'Type ', h('b', { class: 'font-mono font-semibold text-fg' }, CONFIG.typedConfirmWord), ' to confirm'),
+            input,
+          )
+        : null,
+      h('div', { class: 'flex justify-end gap-2' }, cancelBtn, deleteBtn),
     );
     const backdrop = h('div', {
-      class: 'backdrop',
+      class: 'fixed inset-0 z-[2147483001] grid place-items-center bg-black/50 p-4 backdrop-blur-[2px]',
       onclick: (e: Event) => {
         if (e.target === backdrop) this.closeConfirm();
       },
@@ -463,16 +601,19 @@ export class BulkDeleteApp {
         this.selected.delete(chat.id);
         void saveQueue(this.runQueue);
         this.refresh();
+        this.renderRunning();
       },
       onFailed: (chat) => {
         this.runDone++;
         this.runFailed.push(chat);
         void saveQueue(this.runQueue);
+        this.renderRunning();
       },
     });
 
     clearInterval(this.heartbeat);
     this.running = false;
+    this.runView = null;
     if (!this.appHost?.isConnected) return; // extension was disabled mid-run; saved queue is kept for resume
     if (result.sessionExpired) await saveQueue(result.remaining, false);
     else await clearQueue();
@@ -484,49 +625,96 @@ export class BulkDeleteApp {
 
   private showPanel(...children: (Node | null)[]) {
     this.panel.hidden = false;
-    this.panel.classList.toggle('min', this.panelMinimized);
+    setAttr(this.panel, 'data-min', this.panelMinimized);
     this.panel.replaceChildren(...children.filter((c): c is Node => !!c));
   }
 
   private hidePanel() {
     this.panel.hidden = true;
     this.panel.replaceChildren();
+    this.runView = null;
   }
 
-  private panelHeader(title: string, extra?: Node) {
+  /** Header row: status badge, title, optional trailing info, minimize button. */
+  private panelHeader(badge: Node, title: string, extra?: Node) {
+    const minIcon = () => icon(this.panelMinimized ? 'chevronUp' : 'chevronDown', 'size-4');
     const minBtn = h('button', {
-      class: 'icon-btn',
-      title: this.panelMinimized ? 'Expand' : 'Minimize',
+      class: btn.icon,
       'aria-label': this.panelMinimized ? 'Expand' : 'Minimize',
       onclick: () => {
         this.panelMinimized = !this.panelMinimized;
-        if (this.running) this.renderRunning();
-        else this.panel.classList.toggle('min', this.panelMinimized);
+        setAttr(this.panel, 'data-min', this.panelMinimized);
+        minBtn.setAttribute('aria-label', this.panelMinimized ? 'Expand' : 'Minimize');
+        minBtn.replaceChildren(minIcon());
       },
-    }, this.panelMinimized ? '▴' : '▾');
-    return h('div', { class: 'panel-head' }, h('b', { class: 'grow' }, title), extra ?? null, minBtn);
+    }, minIcon());
+    return h(
+      'div',
+      { class: 'flex items-center gap-2.5 px-4 pt-3 pb-2 group-data-min:pb-3' },
+      badge,
+      h('b', { class: 'min-w-0 flex-1 truncate text-[14px] font-semibold' }, title),
+      extra ?? null,
+      minBtn,
+    );
+  }
+
+  private panelBody(...children: (Node | null)[]) {
+    return h('div', { class: 'flex flex-col gap-3 px-4 pt-1 pb-4 group-data-min:hidden' }, ...children);
+  }
+
+  private statusBadge(kind: 'spinner' | 'success' | 'warning' | 'info') {
+    if (kind === 'spinner') {
+      return h('span', { class: 'size-4 shrink-0 animate-spin rounded-full border-2 border-line border-t-fg', 'aria-hidden': 'true' });
+    }
+    const styles = {
+      success: ['check', 'bg-success text-white'],
+      warning: ['alert', 'bg-danger-soft text-danger'],
+      info: ['history', 'bg-surface-2 text-fg'],
+    } as const;
+    const [name, cls] = styles[kind];
+    return h('span', { class: `grid size-6 shrink-0 place-items-center rounded-full ${cls}` }, icon(name, 'size-3.5', 2.5));
   }
 
   private renderRunning() {
     const total = this.runDone + this.runQueue.length;
-    const pct = total ? (this.runDone / total) * 100 : 0;
-    const counter = h('span', { class: 'muted' }, `${this.runDone} / ${total}`);
-    const fill = h('div', { style: `width:${pct}%` });
-    const cancelBtn = h('button', {
-      disabled: this.cancelRequested,
-      onclick: () => {
-        this.cancelRequested = true;
-        this.renderRunning();
-      },
-    }, this.cancelRequested ? 'Cancelling…' : 'Cancel');
+    if (!this.runView) {
+      const counter = h('span', { class: 'text-[13px] text-muted tabular-nums' });
+      const fill = h('div', { class: 'h-full rounded-full bg-fg transition-[width] duration-300 ease-out', style: 'width:0%' });
+      const current = h('div', { class: 'truncate text-[13px] text-muted' });
+      const cancelBtn = h('button', {
+        class: `${btn.secondary} px-3 py-1`,
+        onclick: () => {
+          this.cancelRequested = true;
+          this.renderRunning();
+        },
+      }, 'Cancel');
+      this.runView = { counter, fill, current, cancelBtn };
+      this.showPanel(
+        this.panelHeader(this.statusBadge('spinner'), 'Deleting chats', counter),
+        h('div', { class: 'mx-4 mb-2 h-1.5 overflow-hidden rounded-full bg-surface-2 group-data-min:mb-3', role: 'progressbar', 'aria-valuemin': '0' }, fill),
+        this.panelBody(
+          current,
+          h('div', { class: 'flex items-center gap-2' }, h('span', { class: 'flex-1 text-[12px] text-muted' }, 'You can keep using ChatGPT.'), cancelBtn),
+        ),
+      );
+    }
+    const { counter, fill, current, cancelBtn } = this.runView;
+    counter.textContent = `${this.runDone} / ${total}`;
+    fill.style.width = `${total ? (this.runDone / total) * 100 : 0}%`;
+    fill.parentElement?.setAttribute('aria-valuemax', String(total));
+    fill.parentElement?.setAttribute('aria-valuenow', String(this.runDone));
+    current.textContent = this.currentTitle;
+    current.title = this.currentTitle;
+    cancelBtn.disabled = this.cancelRequested;
+    cancelBtn.textContent = this.cancelRequested ? 'Cancelling…' : 'Cancel';
+  }
 
-    this.showPanel(
-      this.panelHeader('Deleting chats', counter),
-      h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(total), 'aria-valuenow': String(this.runDone) }, fill),
-      h('div', { class: 'panel-body' },
-        h('div', { class: 'current muted', title: this.currentTitle }, this.currentTitle),
-        h('div', { class: 'row' }, h('span', { class: 'grow muted' }, 'You can keep using ChatGPT.'), cancelBtn),
-      ),
+  private stat(value: number, label: string, tone = '') {
+    return h(
+      'div',
+      { class: 'flex flex-col rounded-xl bg-surface-2 px-3 py-2' },
+      h('span', { class: `text-lg font-semibold tabular-nums ${tone}` }, String(value)),
+      h('span', { class: 'text-[12px] text-muted' }, label),
     );
   }
 
@@ -534,41 +722,52 @@ export class BulkDeleteApp {
     const retryQueue = [...r.failed, ...r.remaining].map(({ id, title }) => ({ id, title }));
     const openChat = currentChatId();
     const openChatDeleted = !!openChat && this.deletedIds.has(openChat);
-    const issues = r.failed.length || r.cancelled || r.sessionExpired;
+    const issues = r.failed.length > 0 || r.cancelled || r.sessionExpired;
     this.panelMinimized = false;
 
     let note: Node | null = null;
     if (r.sessionExpired) {
-      note = h('div', { class: 'warn' }, 'Your ChatGPT session expired. Reload and sign in — you’ll be offered to resume the rest.');
+      note = h('p', { class: 'text-[13px] text-danger' }, 'Your ChatGPT session expired. Reload and sign in — you’ll be offered to resume the rest.');
     } else if (r.cancelled) {
-      note = h('div', { class: 'muted' }, `Cancelled. ${r.remaining.length} chat${r.remaining.length === 1 ? ' was' : 's were'} not touched.`);
+      note = h('p', { class: 'text-[13px] text-muted' }, `Cancelled. ${plural(r.remaining.length, 'chat')} ${r.remaining.length === 1 ? 'was' : 'were'} not touched.`);
     }
 
     this.showPanel(
-      this.panelHeader(issues ? 'Deletion finished with issues' : 'Deletion complete'),
-      h('div', { class: 'panel-body' },
+      this.panelHeader(this.statusBadge(issues ? 'warning' : 'success'), issues ? 'Finished with issues' : 'Deletion complete'),
+      this.panelBody(
         h(
           'div',
-          { class: 'stats' },
-          h('div', {}, h('b', {}, String(r.deleted.length)), 'deleted'),
-          h('div', {}, h('b', {}, String(r.failed.length)), 'failed'),
-          r.remaining.length ? h('div', {}, h('b', {}, String(r.remaining.length)), 'not attempted') : null,
+          { class: `grid gap-2 ${r.remaining.length ? 'grid-cols-3' : 'grid-cols-2'}` },
+          this.stat(r.deleted.length, 'deleted', 'text-success'),
+          this.stat(r.failed.length, 'failed', r.failed.length ? 'text-danger' : ''),
+          r.remaining.length ? this.stat(r.remaining.length, 'skipped') : null,
         ),
         note,
         r.failed.length
-          ? h('ul', { class: 'list small' }, ...r.failed.map((f) => h('li', { title: `${f.title} — ${f.error}` }, f.title, h('span', { class: 'err' }, f.error))))
+          ? h(
+              'ul',
+              { class: 'max-h-32 divide-y divide-line overflow-auto rounded-xl border border-line' },
+              ...r.failed.map((f) =>
+                h(
+                  'li',
+                  { class: 'flex items-center gap-2 px-3 py-1.5 text-[13px]', title: `${f.title} — ${f.error}` },
+                  h('span', { class: 'min-w-0 flex-1 truncate' }, f.title),
+                  h('span', { class: 'shrink-0 text-[12px] text-danger' }, f.error),
+                ),
+              ),
+            )
           : null,
-        openChatDeleted ? h('div', { class: 'muted' }, 'The chat you have open was deleted.') : null,
+        openChatDeleted ? h('p', { class: 'text-[13px] text-muted' }, 'The chat you have open was deleted.') : null,
         h(
           'div',
-          { class: 'actions' },
-          openChatDeleted ? h('button', { onclick: () => location.assign('/') }, 'New chat') : null,
+          { class: 'flex flex-wrap justify-end gap-2' },
+          h('button', { class: btn.ghost, onclick: () => this.hidePanel() }, 'Dismiss'),
+          openChatDeleted ? h('button', { class: btn.secondary, onclick: () => location.assign('/') }, 'New chat') : null,
           r.sessionExpired
-            ? h('button', { class: 'danger', onclick: () => location.reload() }, 'Reload page')
+            ? h('button', { class: btn.primary, onclick: () => location.reload() }, icon('refresh', 'size-3.5'), 'Reload page')
             : retryQueue.length
-              ? h('button', { class: 'danger', onclick: () => this.enqueue(retryQueue) }, `Retry ${retryQueue.length}`)
+              ? h('button', { class: btn.danger, onclick: () => this.enqueue(retryQueue) }, icon('refresh', 'size-3.5'), `Retry ${retryQueue.length}`)
               : null,
-          h('button', { onclick: () => this.hidePanel() }, 'Dismiss'),
         ),
       ),
     );
@@ -580,20 +779,25 @@ export class BulkDeleteApp {
     const n = items.length;
     this.panelMinimized = false;
     this.showPanel(
-      this.panelHeader('Unfinished deletion'),
-      h('div', { class: 'panel-body' },
-        h('div', {}, `${n} chat${n === 1 ? ' was' : 's were'} still queued for deletion when the page closed.`),
-        h('ul', { class: 'list small' }, ...items.map((c) => h('li', { title: c.title }, c.title))),
+      this.panelHeader(this.statusBadge('info'), 'Unfinished deletion'),
+      this.panelBody(
+        h('p', { class: 'text-[13px] text-muted' }, `${plural(n, 'chat')} ${n === 1 ? 'was' : 'were'} still queued when the page closed.`),
+        h(
+          'ul',
+          { class: 'max-h-32 divide-y divide-line overflow-auto rounded-xl border border-line' },
+          ...items.map((c) => h('li', { class: 'truncate px-3 py-1.5 text-[13px]', title: c.title }, c.title)),
+        ),
         h(
           'div',
-          { class: 'actions' },
+          { class: 'flex justify-end gap-2' },
           h('button', {
+            class: btn.ghost,
             onclick: () => {
               void clearQueue();
               this.hidePanel();
             },
           }, 'Discard'),
-          h('button', { class: 'danger', onclick: () => this.enqueue(items) }, `Resume ${n}`),
+          h('button', { class: btn.danger, onclick: () => this.enqueue(items) }, `Resume ${n}`),
         ),
       ),
     );
