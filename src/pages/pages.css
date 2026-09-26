@@ -1,0 +1,71 @@
+/* Tailwind for the extension's own pages (popup + settings). */
+@import "tailwindcss" source(none);
+@source "../popup";
+@source "../options";
+
+@theme inline {
+  --color-surface: var(--cbd-surface);
+  --color-surface-2: var(--cbd-surface-2);
+  --color-canvas: var(--cbd-canvas);
+  --color-fg: var(--cbd-fg);
+  --color-muted: var(--cbd-muted);
+  --color-line: var(--cbd-line);
+  --color-ring: var(--cbd-ring);
+  --color-success: var(--cbd-success);
+  --color-accent: var(--cbd-accent);
+  --color-accent-fg: var(--cbd-accent-fg);
+  --color-danger: var(--cbd-danger);
+  --color-danger-fg: var(--cbd-danger-fg);
+  --radius-btn: var(--cbd-radius-btn);
+  --radius-field: var(--cbd-radius-field);
+  --radius-card: var(--cbd-radius-card);
+  --radius-check: var(--cbd-radius-check);
+}
+
+/* Base palette. [data-theme] lets the settings preview force light or dark. */
+:root, [data-theme="light"] {
+  --cbd-canvas: #f7f7f8;
+  --cbd-surface: #ffffff;
+  --cbd-surface-2: #f4f4f4;
+  --cbd-fg: #0d0d0d;
+  --cbd-muted: #6b6b73;
+  --cbd-line: #e5e5e5;
+  --cbd-ring: #2f7cf6;
+  --cbd-success: #10a37f;
+  --cbd-danger-base: #e02e2a;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --cbd-canvas: #171717;
+    --cbd-surface: #212121;
+    --cbd-surface-2: #2f2f2f;
+    --cbd-fg: #ececec;
+    --cbd-muted: #a3a3ab;
+    --cbd-line: #3d3d3d;
+    --cbd-ring: #5b9bff;
+    --cbd-danger-base: #f04f4a;
+  }
+}
+[data-theme="dark"] {
+  --cbd-canvas: #171717;
+  --cbd-surface: #2f2f2f;
+  --cbd-surface-2: #3a3a3a;
+  --cbd-fg: #ececec;
+  --cbd-muted: #a3a3ab;
+  --cbd-line: #444444;
+  --cbd-ring: #5b9bff;
+  --cbd-danger-base: #f04f4a;
+}
+
+/* Same user overrides as the injected UI (see src/styles/theme.css). Declared on
+   every themed scope so they resolve against that scope's palette. */
+:root, [data-theme] {
+  --cbd-accent: var(--cbd-user-accent, var(--cbd-fg));
+  --cbd-accent-fg: var(--cbd-user-accent-fg, var(--cbd-surface));
+  --cbd-danger: var(--cbd-user-danger, var(--cbd-danger-base));
+  --cbd-danger-fg: var(--cbd-user-danger-fg, #ffffff);
+  --cbd-radius-btn: var(--cbd-user-radius-btn, 999px);
+  --cbd-radius-field: var(--cbd-user-radius-field, 12px);
+  --cbd-radius-card: var(--cbd-user-radius-card, 16px);
+  --cbd-radius-check: var(--cbd-user-radius-check, 5px);
+}

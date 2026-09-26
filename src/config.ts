@@ -1,16 +1,27 @@
 // Every ChatGPT-specific selector and endpoint lives here, so a ChatGPT UI or
 // API change is a one-file fix. Selector lists are tried in order.
 //
-// NOTE: the endpoint and payload below match what ChatGPT's own "Delete" action
-// has been observed to send (PATCH /backend-api/conversation/<id> with
-// {"is_visible": false}). Re-verify against live network traffic before release.
+// NOTE: the endpoints and payloads below match what ChatGPT's own UI has been
+// observed to send (PATCH /backend-api/conversation/<id> with {"is_visible": false}
+// to delete, {"is_archived": true|false} to archive/unarchive). Re-verify against
+// live network traffic before release.
 
 export const CONFIG = {
   endpoints: {
     session: '/api/auth/session',
     conversation: (id: string) => `/backend-api/conversation/${encodeURIComponent(id)}`,
+    /** The paginated list ChatGPT's sidebar itself loads (newest first). */
+    conversations: (offset: number, limit: number, archived = false) =>
+      `/backend-api/conversations?offset=${offset}&limit=${limit}&order=updated${archived ? '&is_archived=true' : ''}`,
   },
-  deletePayload: { is_visible: false },
+  /** Project chats are out of scope for v1; the list API tags them with a g-p-* gizmo id. */
+  isProjectConversation: (gizmoId: string | null | undefined) => !!gizmoId && gizmoId.startsWith('g-p-'),
+  /** PATCH body per action. */
+  actionPayload: {
+    delete: { is_visible: false },
+    archive: { is_archived: true },
+    unarchive: { is_archived: false },
+  },
 
   /** Delay between deletions (ms). */
   throttleMs: 500,
@@ -18,6 +29,14 @@ export const CONFIG = {
   maxRetries: 4,
   backoffBaseMs: 1000,
   backoffMaxMs: 30_000,
+
+  /** Where the "Manage chats" button sits — below ChatGPT's header so it doesn't cover its buttons. */
+  managerButton: { top: '64px', right: '20px' },
+  /** Chat manager: page size and pause between pages when loading the full history. */
+  listPageSize: 100,
+  listPageDelayMs: 300,
+  /** Safety cap on history loading (pages × page size). */
+  listMaxPages: 100,
 
   /** A saved queue whose tab hasn't reported in this long is offered for resume. */
   queueHeartbeatMs: 3000,
@@ -55,7 +74,8 @@ export const CONFIG = {
       'button[aria-haspopup="menu"]',
     ],
     menuItem: '[role="menuitem"]',
-    deleteMenuItemText: /^delete$/i,
+    /** Row-menu item per action (unarchive has no sidebar menu item). */
+    menuItemText: { delete: /^delete$/i, archive: /^archive$/i },
     confirmDeleteButton: [
       '[data-testid="delete-conversation-confirm-button"]',
       '[role="dialog"] button.btn-danger',

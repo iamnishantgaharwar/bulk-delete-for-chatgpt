@@ -16,11 +16,13 @@ Clean up your ChatGPT history in seconds instead of clicking through chats one a
 ChatGPT lets you delete chats one by one, or delete everything at once. Bulk Delete for ChatGPT lets you pick exactly which chats to remove and deletes them together.
 
 HOW IT WORKS
-1. Click "Select chats" at the top of the ChatGPT sidebar.
+1. Click "Bulk delete chats" at the top of the ChatGPT sidebar.
 2. Tick the chats you want to remove. Shift-click selects a range; "Select all visible" ticks everything.
 3. Click Delete, check the list of titles, and confirm.
 
 FEATURES
+• A "Manage chats" window listing your whole history with full titles and dates, including search, "older than…" filters and sorting
+• Archive instead of delete (reversible), with Undo and an Archived view to restore chats
 • Checkboxes on every chat in the sidebar
 • Shift-click to select a range of chats
 • Filter chats by title and select all matches
@@ -30,6 +32,7 @@ FEATURES
 • If you close the tab mid-run, you can resume or discard the rest next time
 • A confirmation window lists every chat before anything is deleted, and large batches need a typed confirmation
 • Follows ChatGPT's light and dark mode
+• Customise the look with presets or your own accent colour, Delete-button colour and corner style
 
 PRIVACY
 • Runs entirely in your browser: no servers and no analytics
@@ -49,10 +52,10 @@ Independent project, not affiliated with, endorsed by, or sponsored by OpenAI. C
 ## Privacy practices tab
 
 **Single purpose:**
-Lets users select multiple ChatGPT conversations in the sidebar and delete them in one action.
+Lets users select multiple ChatGPT conversations and delete or archive them in one action.
 
 **Permission justifications:**
-- `storage`: Saves the on/off setting and, during a deletion, the list of chats still waiting to be deleted, so an interrupted run can be resumed. Kept locally on this device.
+- `storage`: Saves the user's settings (the on/off switch and appearance choices: colours and corner style) and, during a deletion, the list of chats still waiting to be deleted, so an interrupted run can be resumed. Kept locally on this device.
 - Host permission `https://chatgpt.com/*`: Needed to add checkboxes and controls to the ChatGPT sidebar and to send the user's delete requests to chatgpt.com using their existing signed-in session. No other sites are accessed.
 
 **Remote code:** No, I am not using remote code.
