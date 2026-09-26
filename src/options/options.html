@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Appearance · Bulk Delete for ChatGPT</title>
+  <link rel="stylesheet" href="pages.css" />
+</head>
+<body class="min-h-screen bg-canvas text-[14px] leading-relaxed text-fg antialiased">
+  <div class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+    <header class="mb-8 flex flex-wrap items-center gap-4">
+      <img src="icons/icon48.png" alt="" class="size-10 rounded-xl" />
+      <div class="min-w-0 flex-1">
+        <h1 class="text-xl font-semibold leading-tight">Appearance</h1>
+        <p class="text-[13px] text-muted">Bulk Delete for ChatGPT · Changes apply instantly to open ChatGPT tabs.</p>
+      </div>
+      <span id="saved" class="text-[13px] text-muted opacity-0 transition-opacity" aria-live="polite">Saved</span>
+      <button id="reset" class="cursor-pointer rounded-full border border-line bg-surface px-4 py-1.5 text-[13px] font-medium hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+        Reset to defaults
+      </button>
+    </header>
+
+    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <main class="flex flex-col gap-6">
+        <section class="rounded-2xl border border-line bg-surface p-5" aria-labelledby="presets-title">
+          <h2 id="presets-title" class="font-semibold">Presets</h2>
+          <p class="mb-4 text-[13px] text-muted">Start from a preset, then fine-tune below.</p>
+          <div id="presets" class="grid grid-cols-2 gap-3 sm:grid-cols-3"></div>
+        </section>
+
+        <section class="rounded-2xl border border-line bg-surface p-5" aria-labelledby="accent-title">
+          <h2 id="accent-title" class="font-semibold">Accent color</h2>
+          <p class="mb-4 text-[13px] text-muted">Checkboxes, the active toggle, the progress bar and the tint on selected chats.</p>
+          <div id="accent" class="flex flex-wrap items-center gap-2.5"></div>
+        </section>
+
+        <section class="rounded-2xl border border-line bg-surface p-5" aria-labelledby="danger-title">
+          <h2 id="danger-title" class="font-semibold">Delete button color</h2>
+          <p class="mb-4 text-[13px] text-muted">Used for the Delete, Retry and Resume buttons.</p>
+          <div id="danger" class="flex flex-wrap items-center gap-2.5"></div>
+        </section>
+
+        <section class="rounded-2xl border border-line bg-surface p-5" aria-labelledby="radius-title">
+          <h2 id="radius-title" class="font-semibold">Corner style</h2>
+          <p class="mb-4 text-[13px] text-muted">Roundness of buttons, fields and panels.</p>
+          <div id="radius" class="grid grid-cols-3 gap-3"></div>
+        </section>
+      </main>
+
+      <aside class="lg:sticky lg:top-6 lg:self-start" aria-label="Preview">
+        <h2 class="mb-3 font-semibold">Preview</h2>
+        <div class="flex flex-col gap-4">
+          <template id="preview-template">
+            <div class="flex flex-col gap-3 rounded-2xl border border-line bg-canvas p-4 text-fg">
+              <div class="flex items-center justify-between">
+                <span class="text-[12px] font-medium text-muted" data-label></span>
+                <span class="inline-flex items-center gap-1.5 rounded-btn border border-accent bg-accent px-3 py-1 text-[12px] font-medium text-accent-fg">✓ Done</span>
+              </div>
+              <ul class="flex flex-col gap-0.5 text-[13px]">
+                <li class="flex items-center gap-2.5 rounded-lg px-2 py-1.5" style="background: color-mix(in srgb, var(--cbd-user-accent, rgb(128 128 128)) 20%, transparent)">
+                  <span class="grid size-4 place-items-center rounded-check border-[1.5px] border-accent bg-accent text-[10px] font-bold text-accent-fg">✓</span>Debug React useEffect loop
+                </li>
+                <li class="flex items-center gap-2.5 px-2 py-1.5">
+                  <span class="size-4 rounded-check border-[1.5px] border-muted"></span>Trip plan: Kyoto 5 days
+                </li>
+                <li class="flex items-center gap-2.5 rounded-lg px-2 py-1.5" style="background: color-mix(in srgb, var(--cbd-user-accent, rgb(128 128 128)) 20%, transparent)">
+                  <span class="grid size-4 place-items-center rounded-check border-[1.5px] border-accent bg-accent text-[10px] font-bold text-accent-fg">✓</span>Test chat
+                </li>
+              </ul>
+              <div class="flex flex-col gap-2 rounded-card border border-line bg-surface p-3 shadow-lg">
+                <div class="flex items-baseline gap-1.5 pl-1"><b class="tabular-nums">2</b><span class="text-[12px] text-muted">selected</span></div>
+                <div class="rounded-field border border-line bg-surface-2 px-2.5 py-1.5 text-[12px] text-muted">Filter by title</div>
+                <div class="flex gap-2">
+                  <span class="flex-1 rounded-btn border border-line bg-surface py-1.5 text-center text-[12px] font-medium">Select all</span>
+                  <span class="rounded-btn border border-line bg-surface px-3 py-1.5 text-[12px] font-medium">Older</span>
+                </div>
+                <span class="rounded-btn bg-danger py-2 text-center text-[12px] font-medium text-danger-fg">Delete 2 chats</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-2"><div class="h-full w-3/5 rounded-full bg-accent"></div></div>
+                <span class="text-[12px] text-muted tabular-nums">3 / 5</span>
+              </div>
+            </div>
+          </template>
+          <div id="preview-light" data-theme="light"></div>
+          <div id="preview-dark" data-theme="dark"></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>

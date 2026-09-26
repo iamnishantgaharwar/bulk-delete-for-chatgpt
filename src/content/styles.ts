@@ -8,7 +8,10 @@ export const GLOBAL_CSS = `
 html:not([data-cbd-select]) .cbd-cb { display: none !important; }
 .cbd-cb { display: inline-flex; flex: none; align-items: center; margin-right: 8px; }
 html[data-cbd-select] a[data-cbd-id] { cursor: pointer; user-select: none; }
-html[data-cbd-select] [data-cbd-selected] { background: rgba(128, 128, 128, 0.18) !important; border-radius: 10px; }
+html[data-cbd-select] [data-cbd-selected] {
+  background: color-mix(in srgb, var(--cbd-user-accent, rgb(128 128 128)) 20%, transparent) !important;
+  border-radius: 10px;
+}
 /* Lets the last chats scroll above the floating action bar. */
 html[data-cbd-select] [data-cbd-scroll-pad] { padding-bottom: var(--cbd-bar-space, 200px) !important; }
 [data-cbd-dim] { opacity: 0.35; }

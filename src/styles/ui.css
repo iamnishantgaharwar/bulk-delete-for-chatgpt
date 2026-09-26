@@ -12,10 +12,18 @@
   --color-muted: var(--cbd-muted);
   --color-line: var(--cbd-line);
   --color-ring: var(--cbd-ring);
+  --color-accent: var(--cbd-accent);
+  --color-accent-fg: var(--cbd-accent-fg);
   --color-danger: var(--cbd-danger);
+  --color-danger-fg: var(--cbd-danger-fg);
   --color-danger-soft: var(--cbd-danger-soft);
   --color-success: var(--cbd-success);
   --shadow-float: var(--cbd-shadow);
+  --radius-btn: var(--cbd-radius-btn);
+  --radius-field: var(--cbd-radius-field);
+  --radius-card: var(--cbd-radius-card);
+  --radius-modal: var(--cbd-radius-modal);
+  --radius-check: var(--cbd-radius-check);
 }
 
 /* Color values for these tokens live in theme.css (appended unprocessed —

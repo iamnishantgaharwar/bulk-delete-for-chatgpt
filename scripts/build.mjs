@@ -38,9 +38,9 @@ const tailwindPlugin = {
       watchFiles: ['src/styles/ui.css', 'src/styles/theme.css'],
       watchDirs: ['src/content'],
     }));
-    // The popup is a normal extension page, so it gets a plain stylesheet.
+    // The popup and settings page are normal extension pages, so they share a plain stylesheet.
     build.onStart(() => {
-      writeFileSync('dist/popup.css', tailwind('src/popup/popup.css'));
+      writeFileSync('dist/pages.css', tailwind('src/pages/pages.css'));
     });
   },
 };
@@ -49,12 +49,14 @@ rmSync('dist', { recursive: true, force: true });
 mkdirSync('dist', { recursive: true });
 cpSync('public', 'dist', { recursive: true });
 cpSync('src/popup/popup.html', 'dist/popup.html');
+cpSync('src/options/options.html', 'dist/options.html');
 
 const ctx = await esbuild.context({
   entryPoints: {
     content: 'src/content/index.ts',
     background: 'src/background.ts',
     popup: 'src/popup/popup.ts',
+    options: 'src/options/options.ts',
   },
   outdir: 'dist',
   bundle: true,

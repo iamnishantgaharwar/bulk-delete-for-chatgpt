@@ -30,6 +30,7 @@ FEATURES
 • If you close the tab mid-run, you can resume or discard the rest next time
 • A confirmation window lists every chat before anything is deleted, and large batches need a typed confirmation
 • Follows ChatGPT's light and dark mode
+• Customise the look with presets or your own accent colour, Delete-button colour and corner style
 
 PRIVACY
 • Runs entirely in your browser: no servers and no analytics
@@ -52,7 +53,7 @@ Independent project, not affiliated with, endorsed by, or sponsored by OpenAI. C
 Lets users select multiple ChatGPT conversations in the sidebar and delete them in one action.
 
 **Permission justifications:**
-- `storage`: Saves the on/off setting and, during a deletion, the list of chats still waiting to be deleted, so an interrupted run can be resumed. Kept locally on this device.
+- `storage`: Saves the user's settings (the on/off switch and appearance choices: colours and corner style) and, during a deletion, the list of chats still waiting to be deleted, so an interrupted run can be resumed. Kept locally on this device.
 - Host permission `https://chatgpt.com/*`: Needed to add checkboxes and controls to the ChatGPT sidebar and to send the user's delete requests to chatgpt.com using their existing signed-in session. No other sites are accessed.
 
 **Remote code:** No, I am not using remote code.

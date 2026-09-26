@@ -27,6 +27,8 @@ Then open `chrome://extensions`, turn on **Developer mode**, click **Load unpack
 
 Esc exits select mode. You can switch the extension on or off from its toolbar popup.
 
+**Appearance:** click **Customize appearance** in the popup, or right-click the toolbar icon and choose **Options**. You can pick a preset (Classic, Ocean, Forest, Grape, Sunset, Minimal) or set your own accent colour, Delete-button colour and corner style (Sharp, Rounded or Pill). A live preview shows the result in light and dark mode, and changes apply immediately to any open ChatGPT tab.
+
 ## How it works
 
 | File | Role |
@@ -37,7 +39,10 @@ Esc exits select mode. You can switch the extension on or off from its toolbar p
 | `src/content/queue-store.ts` | Saves the pending queue to `chrome.storage.local` so an interrupted run can be resumed |
 | `src/styles/ui.css`, `theme.css` | Tailwind entry and light/dark color tokens for the injected UI |
 | `src/content/sidebar.ts` | Finds chat rows and reads their conversation IDs from `/c/<id>` links |
-| `src/popup/*` | On/off toggle and how-to |
+| `src/popup/*` | On/off toggle, how-to, link to settings |
+| `src/options/*` | Appearance settings page (presets, colours, corner style, live preview) |
+| `src/shared/appearance.ts` | Appearance model, presets, storage, and the `--cbd-user-*` CSS variables it applies |
+| `src/pages/pages.css` | Tailwind entry for the popup and settings page |
 | `src/background.ts` | Sets defaults on install |
 
 - **Deletion:** `PATCH /backend-api/conversation/<id>` with `{"is_visible": false}`, authenticated with the page's own session token. The token is fetched from `/api/auth/session` and kept only in memory. This is the request ChatGPT's own Delete button has been seen to send. **Check it against live network traffic before each release.** If the request fails with a non-retryable error, the extension tries clicking through the row's ⋯ → Delete → Confirm instead.

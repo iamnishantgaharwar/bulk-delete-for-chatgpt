@@ -148,7 +148,7 @@ export class BulkDeleteApp {
     this.bar = h(
       'div',
       {
-        class: 'animate-in fixed bottom-3 z-[2147483000] flex flex-col gap-2.5 rounded-2xl border border-line bg-surface p-3 shadow-float',
+        class: 'animate-in fixed bottom-3 z-[2147483000] flex flex-col gap-2.5 rounded-card border border-line bg-surface p-3 shadow-float',
         role: 'toolbar',
         'aria-label': 'Bulk delete',
         hidden: true,
@@ -163,7 +163,7 @@ export class BulkDeleteApp {
         'label',
         {
           class:
-            'flex items-center gap-2 rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-muted ' +
+            'flex items-center gap-2 rounded-field border border-line bg-surface-2 px-2.5 py-1.5 text-muted ' +
             'focus-within:outline-2 focus-within:outline-ring',
         },
         icon('search', 'size-4'),
@@ -176,7 +176,7 @@ export class BulkDeleteApp {
     this.panel = h('div', {
       class:
         'group animate-in fixed right-4 bottom-4 z-[2147483000] w-80 max-w-[calc(100vw-2rem)] overflow-hidden ' +
-        'rounded-2xl border border-line bg-surface shadow-float data-min:w-64',
+        'rounded-card border border-line bg-surface shadow-float data-min:w-64',
       role: 'status',
       'aria-live': 'polite',
       hidden: true,
@@ -189,13 +189,13 @@ export class BulkDeleteApp {
   private ensureToggle() {
     if (!this.toggleHost) {
       const { host, root } = shadowHost('span', 'cbd-toggle-host');
-      this.toggleLabel = h('span', {}, 'Bulk delete chats');
+      this.toggleLabel = h('span', {}, 'Select chats');
       this.toggleBtn = h('button', {
         class:
-          'inline-flex w-fit cursor-pointer items-center gap-2 rounded-full border border-line bg-surface ' +
+          'inline-flex w-fit cursor-pointer items-center gap-2 rounded-btn border border-line bg-surface ' +
           'py-1.5 pr-3.5 pl-3 text-[13px] font-medium text-fg shadow-xs transition-colors ' +
           'hover:border-muted hover:bg-surface-2 ' +
-          'aria-pressed:border-fg aria-pressed:bg-fg aria-pressed:text-surface aria-pressed:hover:opacity-90 ' +
+          'aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-accent-fg aria-pressed:hover:opacity-90 ' +
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
           'data-floating:shadow-float',
         'aria-pressed': 'false',
@@ -208,7 +208,7 @@ export class BulkDeleteApp {
       this.toggleHost = host;
     }
     this.toggleBtn!.setAttribute('aria-pressed', String(this.selectMode));
-    this.toggleLabel!.textContent = this.selectMode ? 'Done' : 'Bulk delete chats';
+    this.toggleLabel!.textContent = this.selectMode ? 'Done' : 'Select chats';
     const iconName = this.selectMode ? 'check' : 'listCheck';
     if (this.toggleBtn!.dataset.icon !== iconName) {
       this.toggleBtn!.dataset.icon = iconName;
@@ -281,11 +281,11 @@ export class BulkDeleteApp {
           'span',
           {
             class:
-              'group grid size-4 place-items-center rounded-[5px] border-[1.5px] border-muted transition-colors ' +
-              'data-checked:border-fg data-checked:bg-fg',
+              'group grid size-4 place-items-center rounded-check border-[1.5px] border-muted transition-colors ' +
+              'data-checked:border-accent data-checked:bg-accent',
             role: 'checkbox',
           },
-          icon('check', 'size-3 text-surface invisible group-data-checked:visible', 3.5),
+          icon('check', 'size-3 text-accent-fg invisible group-data-checked:visible', 3.5),
         ),
       );
       link.prepend(host);
@@ -517,7 +517,7 @@ export class BulkDeleteApp {
           autocomplete: 'off',
           spellcheck: 'false',
           class:
-            'w-full rounded-xl border border-line bg-surface-2 px-3 py-2 font-mono text-[13px] tracking-wider text-fg ' +
+            'w-full rounded-field border border-line bg-surface-2 px-3 py-2 font-mono text-[13px] tracking-wider text-fg ' +
             'outline-none placeholder:text-muted/60 focus:outline-2 focus:outline-ring',
           oninput: (e: Event) => {
             deleteBtn.disabled = (e.target as HTMLInputElement).value.trim() !== CONFIG.typedConfirmWord;
@@ -532,7 +532,7 @@ export class BulkDeleteApp {
       'div',
       {
         class:
-          'animate-in flex max-h-[min(640px,100%)] w-[min(440px,100%)] flex-col gap-4 rounded-3xl border border-line ' +
+          'animate-in flex max-h-[min(640px,100%)] w-[min(440px,100%)] flex-col gap-4 rounded-modal border border-line ' +
           'bg-surface p-6 text-fg shadow-float',
         role: 'dialog',
         'aria-modal': 'true',
@@ -551,7 +551,7 @@ export class BulkDeleteApp {
       ),
       h(
         'ul',
-        { class: 'max-h-64 min-h-12 divide-y divide-line overflow-auto rounded-xl border border-line' },
+        { class: 'max-h-64 min-h-12 divide-y divide-line overflow-auto rounded-field border border-line' },
         ...queue.map((c) => h('li', { class: 'truncate px-3 py-2 text-[13px]', title: c.title }, c.title)),
       ),
       input
@@ -674,7 +674,7 @@ export class BulkDeleteApp {
 
   private statusBadge(kind: 'spinner' | 'success' | 'warning' | 'info') {
     if (kind === 'spinner') {
-      return h('span', { class: 'size-4 shrink-0 animate-spin rounded-full border-2 border-line border-t-fg', 'aria-hidden': 'true' });
+      return h('span', { class: 'size-4 shrink-0 animate-spin rounded-full border-2 border-line border-t-accent', 'aria-hidden': 'true' });
     }
     const styles = {
       success: ['check', 'bg-success text-white'],
@@ -689,7 +689,7 @@ export class BulkDeleteApp {
     const total = this.runDone + this.runQueue.length;
     if (!this.runView) {
       const counter = h('span', { class: 'text-[13px] text-muted tabular-nums' });
-      const fill = h('div', { class: 'h-full rounded-full bg-fg transition-[width] duration-300 ease-out', style: 'width:0%' });
+      const fill = h('div', { class: 'h-full rounded-full bg-accent transition-[width] duration-300 ease-out', style: 'width:0%' });
       const current = h('div', { class: 'truncate text-[13px] text-muted' });
       const cancelBtn = h('button', {
         class: `${btn.secondary} px-3 py-1`,
@@ -722,7 +722,7 @@ export class BulkDeleteApp {
   private stat(value: number, label: string, tone = '') {
     return h(
       'div',
-      { class: 'flex flex-col rounded-xl bg-surface-2 px-3 py-2' },
+      { class: 'flex flex-col rounded-field bg-surface-2 px-3 py-2' },
       h('span', { class: `text-lg font-semibold tabular-nums ${tone}` }, String(value)),
       h('span', { class: 'text-[12px] text-muted' }, label),
     );
@@ -756,7 +756,7 @@ export class BulkDeleteApp {
         r.failed.length
           ? h(
               'ul',
-              { class: 'max-h-32 divide-y divide-line overflow-auto rounded-xl border border-line' },
+              { class: 'max-h-32 divide-y divide-line overflow-auto rounded-field border border-line' },
               ...r.failed.map((f) =>
                 h(
                   'li',
@@ -794,7 +794,7 @@ export class BulkDeleteApp {
         h('p', { class: 'text-[13px] text-muted' }, `${plural(n, 'chat')} ${n === 1 ? 'was' : 'were'} still queued when the page closed.`),
         h(
           'ul',
-          { class: 'max-h-32 divide-y divide-line overflow-auto rounded-xl border border-line' },
+          { class: 'max-h-32 divide-y divide-line overflow-auto rounded-field border border-line' },
           ...items.map((c) => h('li', { class: 'truncate px-3 py-1.5 text-[13px]', title: c.title }, c.title)),
         ),
         h(

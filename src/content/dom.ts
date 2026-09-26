@@ -78,15 +78,15 @@ export function icon(name: IconName, cls = 'size-4', strokeWidth = 2) {
 
 // Shared Tailwind class recipes for buttons.
 const BTN =
-  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[13px] font-medium ' +
+  'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-btn px-3.5 py-1.5 text-[13px] font-medium ' +
   'transition-[background-color,opacity,filter] duration-150 cursor-pointer ' +
   'disabled:cursor-not-allowed disabled:opacity-40 ' +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring';
 
 export const btn = {
-  primary: `${BTN} bg-fg text-surface hover:enabled:opacity-85`,
+  primary: `${BTN} bg-accent text-accent-fg hover:enabled:opacity-90`,
   secondary: `${BTN} border border-line bg-surface text-fg hover:enabled:bg-surface-2`,
-  danger: `${BTN} bg-danger text-white hover:enabled:brightness-110`,
+  danger: `${BTN} bg-danger text-danger-fg hover:enabled:brightness-110`,
   ghost: `${BTN} text-muted hover:enabled:bg-surface-2 hover:enabled:text-fg`,
   icon:
     'inline-flex size-7 items-center justify-center rounded-full text-muted transition-colors cursor-pointer ' +
