@@ -15,6 +15,6 @@ html[data-cbd-select] [data-cbd-scroll-pad] { padding-bottom: var(--cbd-bar-spac
 [data-cbd-deleted] { display: none !important; }
 [data-cbd-pending] { opacity: 0.45; text-decoration: line-through; }
 [data-cbd-pending] .cbd-cb { visibility: hidden; }
-#cbd-toggle-host { display: block; padding: 2px 6px 6px; }
+#cbd-toggle-host { display: block; padding: 6px 10px 10px; }
 #cbd-toggle-host.cbd-floating { position: fixed; left: 12px; bottom: 72px; z-index: 2147483000; padding: 0; }
 `;

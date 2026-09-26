@@ -18,7 +18,7 @@ Then open `chrome://extensions`, turn on **Developer mode**, click **Load unpack
 
 ## Using it
 
-1. On chatgpt.com, click **Select chats** at the top of the sidebar.
+1. On chatgpt.com, click **Bulk delete chats** at the top of the sidebar.
 2. Click rows to tick them. Shift-click selects a range. **Select all visible** (or Ctrl/⌘+A) ticks everything shown.
 3. **Filter** narrows rows by title, and **Select matches** ticks only the matching rows. **Load older chats** auto-scrolls the sidebar to load more history.
 4. Click **Delete N**, check the list, and confirm. For more than 20 chats you have to type `DELETE`.

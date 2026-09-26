@@ -189,22 +189,32 @@ export class BulkDeleteApp {
   private ensureToggle() {
     if (!this.toggleHost) {
       const { host, root } = shadowHost('span', 'cbd-toggle-host');
-      this.toggleLabel = h('span', {}, 'Select chats');
+      this.toggleLabel = h('span', {}, 'Bulk delete chats');
       this.toggleBtn = h('button', {
         class:
-          'flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[14px] text-fg transition-colors ' +
-          'hover:bg-surface-2 aria-pressed:bg-surface-2 aria-pressed:font-medium ' +
-          'focus-visible:outline-2 focus-visible:outline-ring ' +
-          'data-floating:border data-floating:border-line data-floating:bg-surface data-floating:px-3 data-floating:shadow-float',
+          'inline-flex w-fit cursor-pointer items-center gap-2 rounded-full border border-line bg-surface ' +
+          'py-1.5 pr-3.5 pl-3 text-[13px] font-medium text-fg shadow-xs transition-colors ' +
+          'hover:border-muted hover:bg-surface-2 ' +
+          'aria-pressed:border-fg aria-pressed:bg-fg aria-pressed:text-surface aria-pressed:hover:opacity-90 ' +
+          'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ' +
+          'data-floating:shadow-float',
         'aria-pressed': 'false',
         title: 'Select chats to delete (Esc to exit)',
         onclick: () => this.setSelectMode(!this.selectMode),
-      }, icon('listCheck', 'size-[18px] text-muted'), this.toggleLabel);
+      },
+        this.toggleLabel,
+      );
       root.append(this.toggleBtn);
       this.toggleHost = host;
     }
     this.toggleBtn!.setAttribute('aria-pressed', String(this.selectMode));
-    this.toggleLabel!.textContent = this.selectMode ? 'Done selecting' : 'Select chats';
+    this.toggleLabel!.textContent = this.selectMode ? 'Done' : 'Bulk delete chats';
+    const iconName = this.selectMode ? 'check' : 'listCheck';
+    if (this.toggleBtn!.dataset.icon !== iconName) {
+      this.toggleBtn!.dataset.icon = iconName;
+      this.toggleBtn!.firstElementChild?.matches('[aria-hidden]') && this.toggleBtn!.firstElementChild.remove();
+      this.toggleBtn!.prepend(icon(iconName, 'size-4', this.selectMode ? 2.5 : 2));
+    }
 
     const anchor = queryFirst<HTMLElement>(CONFIG.selectors.toggleAnchor);
     let floating = false;

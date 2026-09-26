@@ -16,7 +16,7 @@ Clean up your ChatGPT history in seconds instead of clicking through chats one a
 ChatGPT lets you delete chats one by one, or delete everything at once. Bulk Delete for ChatGPT lets you pick exactly which chats to remove and deletes them together.
 
 HOW IT WORKS
-1. Click "Select chats" at the top of the ChatGPT sidebar.
+1. Click "Bulk delete chats" at the top of the ChatGPT sidebar.
 2. Tick the chats you want to remove. Shift-click selects a range; "Select all visible" ticks everything.
 3. Click Delete, check the list of titles, and confirm.
 
