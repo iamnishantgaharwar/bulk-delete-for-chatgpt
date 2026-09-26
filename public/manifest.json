@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Bulk Delete for ChatGPT",
   "short_name": "Bulk Delete",
-  "version": "1.0.0",
-  "version_name": "1.0.0",
+  "version": "1.1.0",
+  "version_name": "1.1.0",
   "description": "Select many ChatGPT chats in the sidebar and delete them in one step. Runs locally, collects nothing. Not affiliated with OpenAI.",
   "author": {
     "name": "Nishant Gaharwar",

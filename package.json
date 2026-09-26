@@ -1,6 +1,6 @@
 {
   "name": "bulk-delete-for-chatgpt",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Select multiple ChatGPT chats in the sidebar and delete them in one action.",
   "author": "Nishant Gaharwar <iamnishantgaharwar@gmail.com>",
@@ -25,7 +25,7 @@
     "watch": "node scripts/build.mjs --watch",
     "typecheck": "tsc --noEmit",
     "icons": "node scripts/make-icons.mjs",
-    "zip": "npm run build && cd dist && zip -r ../bulk-delete-for-chatgpt.zip ."
+    "zip": "npm run build && cd dist && zip -qr ../bulk-delete-for-chatgpt-v$npm_package_version.zip ."
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",

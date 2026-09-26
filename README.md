@@ -4,6 +4,17 @@ Chrome extension (Manifest V3) that adds checkboxes to the ChatGPT sidebar so yo
 
 > Independent project. Not affiliated with, endorsed by, or sponsored by OpenAI. ChatGPT is a trademark of OpenAI.
 
+## Install
+
+**From a release (no build needed):**
+1. Download `bulk-delete-for-chatgpt-vX.Y.Z.zip` from the [latest release](https://github.com/iamnishantgaharwar/bulk-delete-for-chatgpt/releases/latest) and unzip it.
+2. Open `chrome://extensions` and turn on **Developer mode** (top right).
+3. Click **Load unpacked** and select the unzipped folder (the one that contains `manifest.json`).
+
+To update, unzip the new release over the same folder and click the reload icon on the extension's card.
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
+
 ## Build & load
 
 ```sh
