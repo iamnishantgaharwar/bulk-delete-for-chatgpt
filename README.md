@@ -67,8 +67,3 @@ No analytics, no servers. See [PRIVACY.md](PRIVACY.md).
 ## License
 
 MIT — see [LICENSE](LICENSE).
-
-## Not yet done
-
-- Playwright smoke test against the live chatgpt.com (needs a test account)
-- Web Store listing, screenshots
