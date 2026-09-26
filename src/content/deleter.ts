@@ -2,9 +2,13 @@ import { CONFIG, queryFirst } from '../config';
 import { SessionExpiredError, getAccessToken } from './api';
 import { findLinkById } from './sidebar';
 
+export type Action = 'delete' | 'archive' | 'unarchive';
+
 export interface ChatRef {
   id: string;
   title: string;
+  /** What to do with the chat. Missing = delete (queues saved by older versions). */
+  action?: Action;
 }
 
 export interface FailedChat extends ChatRef {
@@ -12,7 +16,8 @@ export interface FailedChat extends ChatRef {
 }
 
 export interface RunResult {
-  deleted: ChatRef[];
+  /** Chats the action succeeded for (each carries its action). */
+  done: ChatRef[];
   failed: FailedChat[];
   /** Not attempted because the run was cancelled or paused. */
   remaining: ChatRef[];
@@ -22,10 +27,12 @@ export interface RunResult {
 
 export interface RunHooks {
   onStart?(chat: ChatRef): void;
-  onDeleted?(chat: ChatRef): void;
+  onDone?(chat: ChatRef): void;
   onFailed?(chat: FailedChat): void;
   isCancelled(): boolean;
 }
+
+export const actionOf = (c: ChatRef): Action => c.action ?? 'delete';
 
 class RetryableError extends Error {}
 
@@ -33,7 +40,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ---- Method A: the same web request ChatGPT's own UI sends -----------------
 
-async function deleteViaApi(id: string): Promise<void> {
+async function applyViaApi(id: string, action: Action): Promise<void> {
   let refreshed = false;
   for (let attempt = 0; ; attempt++) {
     const token = await getAccessToken();
@@ -43,7 +50,7 @@ async function deleteViaApi(id: string): Promise<void> {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(CONFIG.deletePayload),
+        body: JSON.stringify(CONFIG.actionPayload[action]),
       });
     } catch {
       if (attempt >= CONFIG.maxRetries) throw new RetryableError('Network error');
@@ -76,7 +83,7 @@ function backoff(attempt: number) {
   return sleep(ms + Math.random() * 250);
 }
 
-// ---- Method B: click the row's ⋯ menu → Delete → Confirm -------------------
+// ---- Method B: click the row's ⋯ menu → Delete/Archive (→ Confirm) ----------
 
 async function waitFor<T>(fn: () => T | null | undefined, timeoutMs = 3000): Promise<T> {
   const end = Date.now() + timeoutMs;
@@ -97,7 +104,8 @@ function realClick(el: Element) {
   el.dispatchEvent(new MouseEvent('click', opts));
 }
 
-async function deleteViaUi(id: string): Promise<void> {
+async function applyViaUi(id: string, action: Action): Promise<void> {
+  if (action === 'unarchive') throw new Error('Unarchive needs the API');
   const link = findLinkById(id);
   if (!link) throw new Error('Chat not visible in sidebar');
   link.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
@@ -105,28 +113,29 @@ async function deleteViaUi(id: string): Promise<void> {
   const row = link.closest('li') ?? link.parentElement ?? link;
   const optionsBtn = await waitFor(() => queryFirst<HTMLElement>(CONFIG.selectors.rowOptionsButton, row));
   realClick(optionsBtn);
-  const deleteItem = await waitFor(() =>
-    [...document.querySelectorAll<HTMLElement>(CONFIG.selectors.menuItem)].find((el) =>
-      CONFIG.selectors.deleteMenuItemText.test((el.textContent ?? '').trim()),
-    ),
+  const itemText = CONFIG.selectors.menuItemText[action];
+  const item = await waitFor(() =>
+    [...document.querySelectorAll<HTMLElement>(CONFIG.selectors.menuItem)].find((el) => itemText.test((el.textContent ?? '').trim())),
   );
-  realClick(deleteItem);
-  const confirm = await waitFor(() => queryFirst<HTMLElement>(CONFIG.selectors.confirmDeleteButton));
-  realClick(confirm);
+  realClick(item);
+  if (action === 'delete') {
+    const confirm = await waitFor(() => queryFirst<HTMLElement>(CONFIG.selectors.confirmDeleteButton));
+    realClick(confirm);
+  }
   await waitFor(() => !findLinkById(id), 5000).catch(() => {
-    throw new Error('Chat still present after UI delete');
+    throw new Error(`Chat still present after UI ${action}`);
   });
 }
 
 // ---- Queue runner -----------------------------------------------------------
 
 /**
- * Deletes chats one at a time, strictly by the conversation IDs in the queue.
+ * Applies each chat's action one at a time, strictly by conversation ID.
  * The queue is consumed from the front and may be appended to while running.
  * Cancellation takes effect after the in-flight request finishes.
  */
-export async function runDeletion(queue: ChatRef[], hooks: RunHooks): Promise<RunResult> {
-  const result: RunResult = { deleted: [], failed: [], remaining: [], cancelled: false, sessionExpired: false };
+export async function processQueue(queue: ChatRef[], hooks: RunHooks): Promise<RunResult> {
+  const result: RunResult = { done: [], failed: [], remaining: [], cancelled: false, sessionExpired: false };
   let useApi = true;
 
   try {
@@ -142,6 +151,7 @@ export async function runDeletion(queue: ChatRef[], hooks: RunHooks): Promise<Ru
 
   while (queue.length) {
     const chat = queue[0];
+    const action = actionOf(chat);
     if (hooks.isCancelled()) {
       result.cancelled = true;
       result.remaining = queue.splice(0);
@@ -152,20 +162,20 @@ export async function runDeletion(queue: ChatRef[], hooks: RunHooks): Promise<Ru
     try {
       if (useApi) {
         try {
-          await deleteViaApi(chat.id);
+          await applyViaApi(chat.id, action);
         } catch (e) {
           // Hard, non-retryable API errors (e.g. the endpoint changed) → try the UI path for this chat.
           if (e instanceof SessionExpiredError || e instanceof RetryableError) throw e;
-          await deleteViaUi(chat.id).catch(() => {
+          await applyViaUi(chat.id, action).catch(() => {
             throw e;
           });
         }
       } else {
-        await deleteViaUi(chat.id);
+        await applyViaUi(chat.id, action);
       }
       queue.shift();
-      result.deleted.push(chat);
-      hooks.onDeleted?.(chat);
+      result.done.push(chat);
+      hooks.onDone?.(chat);
     } catch (e) {
       if (e instanceof SessionExpiredError) {
         result.sessionExpired = true;

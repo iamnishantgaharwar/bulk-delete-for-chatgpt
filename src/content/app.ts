@@ -1,7 +1,7 @@
 import { CONFIG, queryFirst } from '../config';
 import type { ChatSummary } from './api';
-import { runDeletion, type ChatRef, type FailedChat, type RunResult } from './deleter';
-import { btn, h, icon, shadowHost } from './dom';
+import { actionOf, processQueue, type Action, type ChatRef, type FailedChat, type RunResult } from './deleter';
+import { btn, h, icon, shadowHost, type IconName } from './dom';
 import { ChatManager } from './manager';
 import { clearQueue, loadStaleQueue, saveQueue } from './queue-store';
 import { currentChatId, findScrollContainer, getChatRows, rowElement, sidebarNav, type ChatRow } from './sidebar';
@@ -11,7 +11,35 @@ const OBSERVE: MutationObserverInit = { childList: true, subtree: true, attribut
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
+const ACTION_COPY: Record<Action, { verb: string; doing: string; title: string; past: string; icon: IconName; explain: string }> = {
+  delete: {
+    verb: 'Delete',
+    doing: 'Deleting',
+    title: 'Deleting chats',
+    past: 'deleted',
+    icon: 'trash',
+    explain: 'This can’t be undone. It runs in the background, so you can keep using ChatGPT.',
+  },
+  archive: {
+    verb: 'Archive',
+    doing: 'Archiving',
+    title: 'Archiving chats',
+    past: 'archived',
+    icon: 'archive',
+    explain: 'Archived chats leave the sidebar but aren’t deleted. Restore them any time from Manage chats → Archived.',
+  },
+  unarchive: {
+    verb: 'Unarchive',
+    doing: 'Restoring',
+    title: 'Restoring chats',
+    past: 'restored',
+    icon: 'unarchive',
+    explain: 'These chats go back to your chat list.',
+  },
+};
+
 interface RunView {
+  title: HTMLElement;
   counter: HTMLElement;
   fill: HTMLElement;
   current: HTMLElement;
@@ -22,19 +50,20 @@ export class BulkDeleteApp {
   private selectMode = false;
   /** Selected chats, keyed by conversation ID captured at selection time. */
   private selected = new Map<string, string>();
-  private deletedIds = new Set<string>();
+  /** Actions completed this session, by chat ID (deleted/archived chats are hidden from the sidebar). */
+  private doneActions = new Map<string, Action>();
   private lastClickedId: string | null = null;
   private filter = '';
   private confirmOpen = false;
   private autoScrolling = false;
 
-  // Background deletion state. The queue is consumed by runDeletion and can be
+  // Background run state. The queue is consumed by processQueue and can be
   // appended to while it runs, so the user can keep queueing chats.
   private runQueue: ChatRef[] = [];
   private running = false;
   private cancelRequested = false;
   private runDone = 0;
-  private runDeleted: ChatRef[] = [];
+  private runSucceeded: ChatRef[] = [];
   private runFailed: FailedChat[] = [];
   private currentTitle = '';
   private heartbeat: number | undefined;
@@ -54,6 +83,8 @@ export class BulkDeleteApp {
   private clearBtn!: HTMLButtonElement;
   private deleteBtn!: HTMLButtonElement;
   private deleteLabel!: HTMLSpanElement;
+  private archiveBtn!: HTMLButtonElement;
+  private archiveLabel!: HTMLSpanElement;
   private loadOlderBtn!: HTMLButtonElement;
   private loadOlderLabel!: HTMLSpanElement;
   private filterInput!: HTMLInputElement;
@@ -146,7 +177,13 @@ export class BulkDeleteApp {
       onclick: () => this.toggleAutoScroll(),
     }, icon('arrowDown', 'size-3.5'), this.loadOlderLabel);
     this.deleteLabel = h('span', {}, 'Delete');
-    this.deleteBtn = h('button', { class: `${btn.danger} w-full py-2`, onclick: () => this.openConfirm() }, icon('trash'), this.deleteLabel);
+    this.deleteBtn = h('button', { class: `${btn.danger} flex-1 py-2`, onclick: () => this.openConfirm('delete') }, icon('trash'), this.deleteLabel);
+    this.archiveLabel = h('span', {}, 'Archive');
+    this.archiveBtn = h('button', {
+      class: `${btn.secondary} flex-1 py-2`,
+      title: 'Hide from the sidebar without deleting (reversible)',
+      onclick: () => this.openConfirm('archive'),
+    }, icon('archive'), this.archiveLabel);
 
     this.bar = h(
       'div',
@@ -174,7 +211,7 @@ export class BulkDeleteApp {
         this.filterClearBtn,
       ),
       h('div', { class: 'flex gap-2' }, this.selectAllBtn, this.loadOlderBtn),
-      this.deleteBtn,
+      h('div', { class: 'flex gap-2' }, this.archiveBtn, this.deleteBtn),
     );
     this.panel = h('div', {
       class:
@@ -195,16 +232,20 @@ export class BulkDeleteApp {
     root.append(managerBtn, this.bar, this.panel, managerLayer, this.modalLayer);
     this.manager = new ChatManager(managerLayer, {
       isPending: (id) => this.runQueue.some((c) => c.id === id),
-      isDeleted: (id) => this.deletedIds.has(id),
+      doneAction: (id) => this.doneActions.get(id),
       sidebarChats: (): ChatSummary[] =>
         getChatRows()
           .filter((r) => r.eligible)
           .map((r) => ({ id: r.id, title: r.title, updatedAt: null, createdAt: null })),
-      requestDelete: (chats) =>
-        this.openConfirm(chats, () => {
+      requestAction: (chats, action) => {
+        const go = () => {
           this.manager.close();
-          this.enqueue(chats);
-        }),
+          this.enqueue(chats, action);
+        };
+        // Unarchiving is harmless — no confirmation needed.
+        if (action === 'unarchive') go();
+        else this.openConfirm(action, chats, go);
+      },
     });
     document.body.append(host);
   }
@@ -293,7 +334,7 @@ export class BulkDeleteApp {
       return;
     }
 
-    setAttr(rowEl, 'data-cbd-deleted', this.deletedIds.has(id));
+    setAttr(rowEl, 'data-cbd-deleted', this.isGone(id));
     setAttr(rowEl, 'data-cbd-pending', pending.has(id));
     if (link.getAttribute('data-cbd-id') !== id) link.setAttribute('data-cbd-id', id);
     if (!cb) {
@@ -330,7 +371,7 @@ export class BulkDeleteApp {
     return getChatRows().filter(
       (r) =>
         r.eligible &&
-        !this.deletedIds.has(r.id) &&
+        !this.isGone(r.id) &&
         !pending.has(r.id) &&
         (!this.filter || r.title.toLowerCase().includes(this.filter)),
     );
@@ -343,7 +384,9 @@ export class BulkDeleteApp {
     const n = this.selected.size;
     this.countEl.textContent = String(n);
     this.deleteBtn.disabled = n === 0;
-    this.deleteLabel.textContent = n ? `Delete ${plural(n, 'chat')}` : 'Delete';
+    this.deleteLabel.textContent = n ? `Delete ${n}` : 'Delete';
+    this.archiveBtn.disabled = n === 0;
+    this.archiveLabel.textContent = n ? `Archive ${n}` : 'Archive';
     this.clearBtn.disabled = n === 0;
     this.selectAllBtn.textContent = this.filter ? 'Select matches' : 'Select all';
     this.loadOlderLabel.textContent = this.autoScrolling ? 'Stop' : 'Older';
@@ -402,7 +445,7 @@ export class BulkDeleteApp {
     if (!selectable.some((r) => r.id === id) && !this.selected.has(id)) return; // queued or filtered out
     const willSelect = !this.selected.has(id);
     if (shift && this.lastClickedId && this.lastClickedId !== id) {
-      const rows = getChatRows().filter((r) => r.eligible && !this.deletedIds.has(r.id));
+      const rows = getChatRows().filter((r) => r.eligible && !this.isGone(r.id));
       const a = rows.findIndex((r) => r.id === this.lastClickedId);
       const b = rows.findIndex((r) => r.id === id);
       if (a !== -1 && b !== -1) {
@@ -524,28 +567,31 @@ export class BulkDeleteApp {
   }
 
   /**
-   * Confirm window for deleting `queue` (defaults to the sidebar selection).
+   * Confirm window for applying `action` to `queue` (defaults to the sidebar selection).
    * `onConfirmed` defaults to leaving select mode and queueing the chats.
+   * Deleting more than a few chats asks for a typed confirmation; archiving is reversible so it doesn't.
    */
   private openConfirm(
+    action: Action = 'delete',
     queue: ChatRef[] = [...this.selected].map(([id, title]) => ({ id, title })),
     onConfirmed: () => void = () => {
       this.setSelectMode(false); // hand the sidebar back so ChatGPT can be used during the run
-      this.enqueue(queue);
+      this.enqueue(queue, action);
     },
   ) {
     if (!queue.length) return;
     this.confirmOpen = true;
     const n = queue.length;
-    const typed = n > CONFIG.typedConfirmThreshold;
-    const deleteBtn = h('button', {
-      class: btn.danger,
+    const copy = ACTION_COPY[action];
+    const typed = action === 'delete' && n > CONFIG.typedConfirmThreshold;
+    const confirmBtn = h('button', {
+      class: action === 'delete' ? btn.danger : btn.primary,
       disabled: typed,
       onclick: () => {
         this.closeConfirm();
         onConfirmed();
       },
-    }, `Delete ${plural(n, 'chat')}`);
+    }, `${copy.verb} ${plural(n, 'chat')}`);
     const cancelBtn = h('button', { class: btn.secondary, onclick: () => this.closeConfirm() }, 'Cancel');
     const input = typed
       ? h('input', {
@@ -558,10 +604,10 @@ export class BulkDeleteApp {
             'w-full rounded-field border border-line bg-surface-2 px-3 py-2 font-mono text-[13px] tracking-wider text-fg ' +
             'outline-none placeholder:text-muted/60 focus:outline-2 focus:outline-ring',
           oninput: (e: Event) => {
-            deleteBtn.disabled = (e.target as HTMLInputElement).value.trim() !== CONFIG.typedConfirmWord;
+            confirmBtn.disabled = (e.target as HTMLInputElement).value.trim() !== CONFIG.typedConfirmWord;
           },
           onkeydown: (e: KeyboardEvent) => {
-            if (e.key === 'Enter' && !deleteBtn.disabled) deleteBtn.click();
+            if (e.key === 'Enter' && !confirmBtn.disabled) confirmBtn.click();
           },
         })
       : null;
@@ -579,12 +625,20 @@ export class BulkDeleteApp {
       h(
         'div',
         { class: 'flex gap-3.5' },
-        h('div', { class: 'grid size-10 shrink-0 place-items-center rounded-full bg-danger-soft text-danger' }, icon('trash', 'size-5')),
+        h(
+          'div',
+          {
+            class: `grid size-10 shrink-0 place-items-center rounded-full ${
+              action === 'delete' ? 'bg-danger-soft text-danger' : 'bg-surface-2 text-fg'
+            }`,
+          },
+          icon(copy.icon, 'size-5'),
+        ),
         h(
           'div',
           { class: 'flex flex-col gap-1' },
-          h('h2', { id: 'cbd-confirm-title', class: 'text-[17px] font-semibold' }, `Delete ${plural(n, 'chat')}?`),
-          h('p', { class: 'text-[13px] text-muted' }, 'This can’t be undone. Deletion runs in the background, so you can keep using ChatGPT.'),
+          h('h2', { id: 'cbd-confirm-title', class: 'text-[17px] font-semibold' }, `${copy.verb} ${plural(n, 'chat')}?`),
+          h('p', { class: 'text-[13px] text-muted' }, copy.explain),
         ),
       ),
       h(
@@ -600,7 +654,7 @@ export class BulkDeleteApp {
             input,
           )
         : null,
-      h('div', { class: 'flex justify-end gap-2' }, cancelBtn, deleteBtn),
+      h('div', { class: 'flex justify-end gap-2' }, cancelBtn, confirmBtn),
     );
     const backdrop = h('div', {
       class: 'fixed inset-0 z-[2147483001] grid place-items-center bg-black/50 p-4 backdrop-blur-[2px]',
@@ -614,10 +668,24 @@ export class BulkDeleteApp {
 
   // ---- background run -----------------------------------------------------
 
-  /** Adds already-confirmed chats to the background queue, starting a run if idle. */
-  private enqueue(chats: ChatRef[]) {
+  /** Deleted or archived this session, so no longer in the main chat list. */
+  private isGone(id: string) {
+    const a = this.doneActions.get(id);
+    return a === 'delete' || a === 'archive';
+  }
+
+  /**
+   * Adds already-confirmed chats to the background queue, starting a run if idle.
+   * `action` overrides each chat's own action (chats from retry/resume keep theirs).
+   */
+  private enqueue(chats: ChatRef[], action?: Action) {
     const pending = this.pendingIds();
-    const fresh = chats.filter((c) => !pending.has(c.id) && !this.deletedIds.has(c.id));
+    const fresh = chats
+      .map((c) => ({ id: c.id, title: c.title, action: action ?? actionOf(c) }))
+      .filter((c) => {
+        const done = this.doneActions.get(c.id);
+        return !pending.has(c.id) && done !== 'delete' && done !== c.action;
+      });
     if (!fresh.length) return;
     this.runQueue.push(...fresh);
     void saveQueue(this.runQueue);
@@ -631,22 +699,22 @@ export class BulkDeleteApp {
     this.running = true;
     this.cancelRequested = false;
     this.runDone = 0;
-    this.runDeleted = [];
+    this.runSucceeded = [];
     this.runFailed = [];
     this.currentTitle = 'Starting…';
     this.renderRunning();
     this.heartbeat = window.setInterval(() => void saveQueue(this.runQueue), CONFIG.queueHeartbeatMs);
 
-    const result = await runDeletion(this.runQueue, {
+    const result = await processQueue(this.runQueue, {
       isCancelled: () => this.cancelRequested,
       onStart: (chat) => {
-        this.currentTitle = chat.title;
+        this.currentTitle = `${ACTION_COPY[actionOf(chat)].doing}: ${chat.title}`;
         this.renderRunning();
       },
-      onDeleted: (chat) => {
+      onDone: (chat) => {
         this.runDone++;
-        this.runDeleted.push(chat);
-        this.deletedIds.add(chat.id);
+        this.runSucceeded.push(chat);
+        this.doneActions.set(chat.id, actionOf(chat));
         this.selected.delete(chat.id);
         void saveQueue(this.runQueue);
         this.refresh();
@@ -669,7 +737,7 @@ export class BulkDeleteApp {
     if (result.sessionExpired) await saveQueue(result.remaining, false);
     else await clearQueue();
     this.refresh();
-    this.renderSummary({ ...result, deleted: this.runDeleted, failed: this.runFailed });
+    this.renderSummary({ ...result, done: this.runSucceeded, failed: this.runFailed });
   }
 
   // ---- corner panel: resume / progress / summary --------------------------
@@ -739,9 +807,10 @@ export class BulkDeleteApp {
           this.renderRunning();
         },
       }, 'Cancel');
-      this.runView = { counter, fill, current, cancelBtn };
+      const header = this.panelHeader(this.statusBadge('spinner'), '', counter);
+      this.runView = { title: header.querySelector('b')!, counter, fill, current, cancelBtn };
       this.showPanel(
-        this.panelHeader(this.statusBadge('spinner'), 'Deleting chats', counter),
+        header,
         h('div', { class: 'mx-4 mb-2 h-1.5 overflow-hidden rounded-full bg-surface-2 group-data-min:mb-3', role: 'progressbar', 'aria-valuemin': '0' }, fill),
         this.panelBody(
           current,
@@ -749,7 +818,9 @@ export class BulkDeleteApp {
         ),
       );
     }
-    const { counter, fill, current, cancelBtn } = this.runView;
+    const { title, counter, fill, current, cancelBtn } = this.runView;
+    const actions = new Set([...this.runSucceeded, ...this.runFailed, ...this.runQueue].map(actionOf));
+    title.textContent = actions.size === 1 ? ACTION_COPY[[...actions][0]].title : 'Updating chats';
     counter.textContent = `${this.runDone} / ${total}`;
     fill.style.width = `${total ? (this.runDone / total) * 100 : 0}%`;
     fill.parentElement?.setAttribute('aria-valuemax', String(total));
@@ -770,10 +841,13 @@ export class BulkDeleteApp {
   }
 
   private renderSummary(r: RunResult) {
-    const retryQueue = [...r.failed, ...r.remaining].map(({ id, title }) => ({ id, title }));
+    const retryQueue = [...r.failed, ...r.remaining].map(({ id, title, action }) => ({ id, title, action }));
     const openChat = currentChatId();
-    const openChatDeleted = !!openChat && this.deletedIds.has(openChat);
+    const openChatGone = !!openChat && this.isGone(openChat);
     const issues = r.failed.length > 0 || r.cancelled || r.sessionExpired;
+    const byAction = (a: Action) => r.done.filter((c) => actionOf(c) === a);
+    const archived = byAction('archive');
+    const actions = new Set([...r.done, ...r.failed, ...r.remaining].map(actionOf));
     this.panelMinimized = false;
 
     let note: Node | null = null;
@@ -783,16 +857,18 @@ export class BulkDeleteApp {
       note = h('p', { class: 'text-[13px] text-muted' }, `Cancelled. ${plural(r.remaining.length, 'chat')} ${r.remaining.length === 1 ? 'was' : 'were'} not touched.`);
     }
 
+    const stats = [
+      ...(['delete', 'archive', 'unarchive'] as const)
+        .filter((a) => actions.has(a) || byAction(a).length)
+        .map((a) => this.stat(byAction(a).length, ACTION_COPY[a].past, 'text-success')),
+      this.stat(r.failed.length, 'failed', r.failed.length ? 'text-danger' : ''),
+      r.remaining.length ? this.stat(r.remaining.length, 'skipped') : null,
+    ].filter((x): x is HTMLDivElement => !!x);
+
     this.showPanel(
-      this.panelHeader(this.statusBadge(issues ? 'warning' : 'success'), issues ? 'Finished with issues' : 'Deletion complete'),
+      this.panelHeader(this.statusBadge(issues ? 'warning' : 'success'), issues ? 'Finished with issues' : 'All done'),
       this.panelBody(
-        h(
-          'div',
-          { class: `grid gap-2 ${r.remaining.length ? 'grid-cols-3' : 'grid-cols-2'}` },
-          this.stat(r.deleted.length, 'deleted', 'text-success'),
-          this.stat(r.failed.length, 'failed', r.failed.length ? 'text-danger' : ''),
-          r.remaining.length ? this.stat(r.remaining.length, 'skipped') : null,
-        ),
+        h('div', { class: 'grid grid-cols-[repeat(auto-fit,minmax(0,1fr))] gap-2' }, ...stats),
         note,
         r.failed.length
           ? h(
@@ -808,12 +884,19 @@ export class BulkDeleteApp {
               ),
             )
           : null,
-        openChatDeleted ? h('p', { class: 'text-[13px] text-muted' }, 'The chat you have open was deleted.') : null,
+        openChatGone ? h('p', { class: 'text-[13px] text-muted' }, 'The chat you have open was removed.') : null,
         h(
           'div',
           { class: 'flex flex-wrap justify-end gap-2' },
           h('button', { class: btn.ghost, onclick: () => this.hidePanel() }, 'Dismiss'),
-          openChatDeleted ? h('button', { class: btn.secondary, onclick: () => location.assign('/') }, 'New chat') : null,
+          archived.length && !r.sessionExpired
+            ? h('button', {
+                class: btn.secondary,
+                title: 'Unarchive the chats just archived',
+                onclick: () => this.enqueue(archived, 'unarchive'),
+              }, icon('unarchive', 'size-3.5'), 'Undo archive')
+            : null,
+          openChatGone ? h('button', { class: btn.secondary, onclick: () => location.assign('/') }, 'New chat') : null,
           r.sessionExpired
             ? h('button', { class: btn.primary, onclick: () => location.reload() }, icon('refresh', 'size-3.5'), 'Reload page')
             : retryQueue.length
@@ -830,7 +913,7 @@ export class BulkDeleteApp {
     const n = items.length;
     this.panelMinimized = false;
     this.showPanel(
-      this.panelHeader(this.statusBadge('info'), 'Unfinished deletion'),
+      this.panelHeader(this.statusBadge('info'), 'Unfinished run'),
       this.panelBody(
         h('p', { class: 'text-[13px] text-muted' }, `${plural(n, 'chat')} ${n === 1 ? 'was' : 'were'} still queued when the page closed.`),
         h(

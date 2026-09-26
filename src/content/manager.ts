@@ -1,19 +1,31 @@
 import { CONFIG } from '../config';
 import { SessionExpiredError, listConversations, type ChatSummary } from './api';
-import type { ChatRef } from './deleter';
+import type { Action, ChatRef } from './deleter';
 import { btn, h, icon } from './dom';
 
 type Sort = 'newest' | 'oldest' | 'az';
+type View = 'chats' | 'archived';
 type Age = 'all' | '7' | '30' | '90' | '365';
 
 export interface ManagerHooks {
   isPending(id: string): boolean;
-  isDeleted(id: string): boolean;
+  /** Action already completed for this chat this session, if any. */
+  doneAction(id: string): Action | undefined;
   /** Chats currently in the sidebar — used if the full history can't be loaded. */
   sidebarChats(): ChatSummary[];
-  /** Opens the confirm window; the app enqueues and closes the manager on confirm. */
-  requestDelete(chats: ChatRef[]): void;
+  /** Confirms (where needed), queues the action and closes the manager. */
+  requestAction(chats: ChatRef[], action: Action): void;
 }
+
+interface ViewData {
+  chats: ChatSummary[];
+  loadedAt: number;
+  total: number | null;
+  notice: string;
+  fromSidebar: boolean;
+}
+
+const emptyView = (): ViewData => ({ chats: [], loadedAt: 0, total: null, notice: '', fromSidebar: false });
 
 const DAY = 86_400_000;
 const CACHE_MS = 60_000;
@@ -45,13 +57,10 @@ const SELECT_CLS =
  * searchable and filterable by age, with multi-select and delete.
  */
 export class ChatManager {
-  private chats: ChatSummary[] = [];
-  private loadedAt = 0;
+  private view: View = 'chats';
+  private data: Record<View, ViewData> = { chats: emptyView(), archived: emptyView() };
   private loading = false;
   private loadGen = 0;
-  private total: number | null = null;
-  private notice = '';
-  private fromSidebar = false;
 
   private selected = new Map<string, string>();
   private lastClickedId: string | null = null;
@@ -70,6 +79,8 @@ export class ChatManager {
   private countEl!: HTMLSpanElement;
   private clearBtn!: HTMLButtonElement;
   private deleteBtn!: HTMLButtonElement;
+  private archiveBtn!: HTMLButtonElement;
+  private viewBtns!: Record<View, HTMLButtonElement>;
   private refreshBtn!: HTMLButtonElement;
   private searchInput!: HTMLInputElement;
 
@@ -79,12 +90,38 @@ export class ChatManager {
     return !!this.backdrop;
   }
 
+  /** Data for the current view. */
+  private get d() {
+    return this.data[this.view];
+  }
+
   open() {
     if (this.backdrop) return;
     this.build();
-    if (!this.chats.length || Date.now() - this.loadedAt > CACHE_MS) void this.load();
-    else this.render();
+    this.view = 'chats'; // always open on the main list
+    this.selected.clear();
+    this.lastClickedId = null;
+    this.showView('chats');
     this.searchInput.focus();
+  }
+
+  private showView(view: View) {
+    if (view !== this.view) {
+      this.loadGen++; // abandon the other view's in-progress load
+      this.loading = false;
+      this.view = view;
+      this.selected.clear();
+      this.lastClickedId = null;
+    }
+    for (const [v, b] of Object.entries(this.viewBtns)) b.setAttribute('aria-pressed', String(v === view));
+    if (!this.d.chats.length || Date.now() - this.d.loadedAt > CACHE_MS) void this.load();
+    else this.render();
+  }
+
+  /** Hidden in this view because of an action already completed. */
+  private hidden(id: string) {
+    const a = this.hooks.doneAction(id);
+    return a === 'delete' || a === (this.view === 'chats' ? 'archive' : 'unarchive');
   }
 
   close() {
@@ -94,8 +131,12 @@ export class ChatManager {
     this.backdrop = null;
   }
 
-  /** Re-draw (e.g. after chats were deleted or queued in the background). */
+  /** Re-draw after chats were queued or processed in the background. */
   refresh() {
+    // Chats move between views (archive ⇄ unarchive), so reload both lists next time they're shown.
+    // The open view just re-renders; completed actions are filtered out by hidden().
+    this.data.chats.loadedAt = 0;
+    this.data.archived.loadedAt = 0;
     if (this.backdrop) this.scheduleRender();
   }
 
@@ -113,15 +154,17 @@ export class ChatManager {
 
   private async load() {
     const gen = ++this.loadGen;
+    const view = this.view;
+    const d = this.data[view];
     this.loading = true;
-    this.notice = '';
-    this.fromSidebar = false;
+    d.notice = '';
+    d.fromSidebar = false;
     const loaded: ChatSummary[] = [];
     const seen = new Set<string>();
     this.render();
     try {
       for (let page = 0; page < CONFIG.listMaxPages; page++) {
-        const { items, total, raw } = await listConversations(page * CONFIG.listPageSize, CONFIG.listPageSize);
+        const { items, total, raw } = await listConversations(page * CONFIG.listPageSize, CONFIG.listPageSize, view === 'archived');
         if (gen !== this.loadGen) return;
         for (const c of items) {
           if (!seen.has(c.id)) {
@@ -129,27 +172,29 @@ export class ChatManager {
             loaded.push(c);
           }
         }
-        this.chats = [...loaded];
-        this.total = total;
+        d.chats = [...loaded];
+        d.total = total;
         this.scheduleRender();
         if (raw < CONFIG.listPageSize) break;
         await new Promise((r) => setTimeout(r, CONFIG.listPageDelayMs));
         if (gen !== this.loadGen) return;
       }
-      this.loadedAt = Date.now();
+      d.loadedAt = Date.now();
     } catch (e) {
       if (gen !== this.loadGen) return;
-      if (!loaded.length) {
+      if (!loaded.length && view === 'chats') {
         // Fall back to what the sidebar has rendered.
-        this.chats = this.hooks.sidebarChats();
-        this.fromSidebar = true;
+        d.chats = this.hooks.sidebarChats();
+        d.fromSidebar = true;
       }
-      this.notice =
+      d.notice =
         e instanceof SessionExpiredError
           ? 'Your ChatGPT session expired — reload the page to see your full history.'
           : loaded.length
-            ? 'Couldn’t load your whole history; showing what loaded so far.'
-            : 'Couldn’t load your full history; showing the chats in the sidebar.';
+            ? 'Couldn’t load everything; showing what loaded so far.'
+            : view === 'chats'
+              ? 'Couldn’t load your full history; showing the chats in the sidebar.'
+              : 'Couldn’t load your archived chats.';
     } finally {
       if (gen === this.loadGen) {
         this.loading = false;
@@ -161,16 +206,16 @@ export class ChatManager {
   private filtered(): ChatSummary[] {
     const q = this.query.toLowerCase();
     const cutoff = this.age === 'all' ? null : Date.now() - Number(this.age) * DAY;
-    const list = this.chats.filter(
+    const list = this.d.chats.filter(
       (c) =>
-        !this.hooks.isDeleted(c.id) &&
+        !this.hidden(c.id) &&
         (!q || c.title.toLowerCase().includes(q)) &&
         (cutoff == null || (c.updatedAt != null && c.updatedAt < cutoff)),
     );
     const byTime = (c: ChatSummary) => c.updatedAt ?? 0;
     if (this.sort === 'oldest') list.sort((a, b) => byTime(a) - byTime(b));
     else if (this.sort === 'az') list.sort((a, b) => a.title.localeCompare(b.title));
-    else if (!this.fromSidebar) list.sort((a, b) => byTime(b) - byTime(a));
+    else if (!this.d.fromSidebar) list.sort((a, b) => byTime(b) - byTime(a));
     return list;
   }
 
@@ -266,13 +311,33 @@ export class ChatManager {
         this.renderSelection();
       },
     }, 'Clear');
+    const selectedChats = () => [...this.selected].map(([id, title]) => ({ id, title }));
     this.deleteBtn = h('button', {
       class: `${btn.danger} px-5 py-2`,
       onclick: () => {
-        const chats = [...this.selected].map(([id, title]) => ({ id, title }));
-        if (chats.length) this.hooks.requestDelete(chats);
+        const chats = selectedChats();
+        if (chats.length) this.hooks.requestAction(chats, 'delete');
       },
     }, icon('trash'), h('span', {}, 'Delete'));
+    // Archive in the Chats view, Unarchive in the Archived view.
+    this.archiveBtn = h('button', {
+      class: `${btn.secondary} px-4 py-2`,
+      onclick: () => {
+        const chats = selectedChats();
+        if (chats.length) this.hooks.requestAction(chats, this.view === 'chats' ? 'archive' : 'unarchive');
+      },
+    });
+
+    const viewBtn = (view: View, label: string) =>
+      h('button', {
+        class:
+          'cursor-pointer rounded-btn px-3 py-1 text-[13px] font-medium text-muted transition-colors hover:text-fg ' +
+          'aria-pressed:bg-surface aria-pressed:text-fg aria-pressed:shadow-sm ' +
+          'focus-visible:outline-2 focus-visible:outline-ring',
+        'aria-pressed': 'false',
+        onclick: () => this.showView(view),
+      }, label);
+    this.viewBtns = { chats: viewBtn('chats', 'Chats'), archived: viewBtn('archived', 'Archived') };
 
     const modal = h(
       'div',
@@ -292,6 +357,7 @@ export class ChatManager {
           h('h2', { id: 'cbd-manager-title', class: 'text-[17px] font-semibold' }, 'Manage chats'),
           this.statusEl,
         ),
+        h('div', { class: 'flex gap-0.5 rounded-btn bg-surface-2 p-0.5', role: 'group', 'aria-label': 'Show' }, this.viewBtns.chats, this.viewBtns.archived),
         this.refreshBtn,
         closeBtn,
       ),
@@ -320,6 +386,7 @@ export class ChatManager {
         { class: 'flex items-center gap-3 border-t border-line bg-surface px-5 py-3' },
         h('div', { class: 'flex flex-1 items-baseline gap-1.5' }, this.countEl, h('span', { class: 'text-[13px] text-muted' }, 'selected')),
         this.clearBtn,
+        this.archiveBtn,
         this.deleteBtn,
       ),
     );
@@ -352,7 +419,7 @@ export class ChatManager {
         }
       }
     }
-    const chat = this.chats.find((c) => c.id === id);
+    const chat = this.d.chats.find((c) => c.id === id);
     if (willSelect) this.selected.set(id, chat?.title ?? 'Untitled chat');
     else this.selected.delete(id);
     this.lastClickedId = id;
@@ -372,16 +439,17 @@ export class ChatManager {
     if (!this.backdrop) return;
     // Drop selections that were deleted or queued meanwhile.
     for (const id of [...this.selected.keys()]) {
-      if (this.hooks.isDeleted(id) || this.hooks.isPending(id)) this.selected.delete(id);
+      if (this.hidden(id) || this.hooks.isPending(id)) this.selected.delete(id);
     }
     this.shown = this.filtered();
 
     // Status line
-    const count = this.chats.filter((c) => !this.hooks.isDeleted(c.id)).length;
+    const count = this.d.chats.filter((c) => !this.hidden(c.id)).length;
     this.statusEl.textContent = this.loading
-      ? `Loading… ${plural(count, 'chat')}${this.total ? ` of ${this.total.toLocaleString()}` : ''}`
-      : this.notice || `${plural(count, 'chat')}${this.fromSidebar ? ' in the sidebar' : ''}`;
-    this.statusEl.classList.toggle('text-danger', !!this.notice && !this.loading);
+      ? `Loading… ${plural(count, 'chat')}${this.d.total ? ` of ${this.d.total.toLocaleString()}` : ''}`
+      : this.d.notice ||
+        `${plural(count, this.view === 'archived' ? 'archived chat' : 'chat')}${this.d.fromSidebar ? ' in the sidebar' : ''}`;
+    this.statusEl.classList.toggle('text-danger', !!this.d.notice && !this.loading);
     this.refreshBtn.disabled = this.loading;
     this.refreshBtn.firstElementChild?.classList.toggle('animate-spin', this.loading);
 
@@ -391,7 +459,7 @@ export class ChatManager {
         h(
           'li',
           { class: 'grid h-full place-items-center p-10 text-center text-[14px] text-muted' },
-          this.loading && !this.chats.length ? 'Loading your chats…' : this.chats.length ? 'No chats match these filters.' : 'No chats found.',
+          this.loading && !this.d.chats.length ? 'Loading your chats…' : this.d.chats.length ? 'No chats match these filters.' : this.view === 'archived' ? 'No archived chats.' : 'No chats found.',
         ),
       );
     } else {
@@ -426,6 +494,13 @@ export class ChatManager {
     this.clearBtn.disabled = n === 0;
     this.deleteBtn.disabled = n === 0;
     this.deleteBtn.lastElementChild!.textContent = n ? `Delete ${plural(n, 'chat')}` : 'Delete';
+    const archiving = this.view === 'chats';
+    this.archiveBtn.disabled = n === 0;
+    this.archiveBtn.title = archiving ? 'Hide from the sidebar without deleting (reversible)' : 'Move back to your chat list';
+    this.archiveBtn.replaceChildren(
+      icon(archiving ? 'archive' : 'unarchive'),
+      h('span', {}, `${archiving ? 'Archive' : 'Unarchive'}${n ? ` ${n.toLocaleString()}` : ''}`),
+    );
   }
 
   private row(c: ChatSummary) {

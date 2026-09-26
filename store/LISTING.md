@@ -22,6 +22,7 @@ HOW IT WORKS
 
 FEATURES
 • A "Manage chats" window listing your whole history with full titles and dates, including search, "older than…" filters and sorting
+• Archive instead of delete (reversible), with Undo and an Archived view to restore chats
 • Checkboxes on every chat in the sidebar
 • Shift-click to select a range of chats
 • Filter chats by title and select all matches
@@ -51,7 +52,7 @@ Independent project, not affiliated with, endorsed by, or sponsored by OpenAI. C
 ## Privacy practices tab
 
 **Single purpose:**
-Lets users select multiple ChatGPT conversations in the sidebar and delete them in one action.
+Lets users select multiple ChatGPT conversations and delete or archive them in one action.
 
 **Permission justifications:**
 - `storage`: Saves the user's settings (the on/off switch and appearance choices: colours and corner style) and, during a deletion, the list of chats still waiting to be deleted, so an interrupted run can be resumed. Kept locally on this device.

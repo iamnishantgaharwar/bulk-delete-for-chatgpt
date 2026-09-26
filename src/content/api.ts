@@ -42,16 +42,21 @@ function toMs(t: string | number | null | undefined): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
-/** One page of the user's (non-archived, non-project) conversations, newest first. */
-export async function listConversations(offset: number, limit: number): Promise<{ items: ChatSummary[]; total: number | null; raw: number }> {
+/** One page of the user's conversations (non-project; archived or not), newest first. */
+export async function listConversations(
+  offset: number,
+  limit: number,
+  archived = false,
+): Promise<{ items: ChatSummary[]; total: number | null; raw: number }> {
+  const url = CONFIG.endpoints.conversations(offset, limit, archived);
   let token = await getAccessToken();
-  let res = await fetch(CONFIG.endpoints.conversations(offset, limit), {
+  let res = await fetch(url, {
     credentials: 'include',
     headers: { Authorization: `Bearer ${token}` },
   });
   if (res.status === 401 || res.status === 403) {
     token = await getAccessToken(true);
-    res = await fetch(CONFIG.endpoints.conversations(offset, limit), {
+    res = await fetch(url, {
       credentials: 'include',
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -61,7 +66,7 @@ export async function listConversations(offset: number, limit: number): Promise<
   const data = (await res.json()) as { items?: RawConversation[]; total?: number };
   const rawItems = Array.isArray(data.items) ? data.items : [];
   const items = rawItems
-    .filter((c) => c.id && !c.is_archived && !CONFIG.isProjectConversation(c.gizmo_id))
+    .filter((c) => c.id && c.is_archived !== !archived && !CONFIG.isProjectConversation(c.gizmo_id))
     .map((c) => ({
       id: c.id!,
       title: (c.title ?? '').trim() || 'Untitled chat',

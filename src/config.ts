@@ -1,21 +1,27 @@
 // Every ChatGPT-specific selector and endpoint lives here, so a ChatGPT UI or
 // API change is a one-file fix. Selector lists are tried in order.
 //
-// NOTE: the endpoint and payload below match what ChatGPT's own "Delete" action
-// has been observed to send (PATCH /backend-api/conversation/<id> with
-// {"is_visible": false}). Re-verify against live network traffic before release.
+// NOTE: the endpoints and payloads below match what ChatGPT's own UI has been
+// observed to send (PATCH /backend-api/conversation/<id> with {"is_visible": false}
+// to delete, {"is_archived": true|false} to archive/unarchive). Re-verify against
+// live network traffic before release.
 
 export const CONFIG = {
   endpoints: {
     session: '/api/auth/session',
     conversation: (id: string) => `/backend-api/conversation/${encodeURIComponent(id)}`,
     /** The paginated list ChatGPT's sidebar itself loads (newest first). */
-    conversations: (offset: number, limit: number) =>
-      `/backend-api/conversations?offset=${offset}&limit=${limit}&order=updated`,
+    conversations: (offset: number, limit: number, archived = false) =>
+      `/backend-api/conversations?offset=${offset}&limit=${limit}&order=updated${archived ? '&is_archived=true' : ''}`,
   },
   /** Project chats are out of scope for v1; the list API tags them with a g-p-* gizmo id. */
   isProjectConversation: (gizmoId: string | null | undefined) => !!gizmoId && gizmoId.startsWith('g-p-'),
-  deletePayload: { is_visible: false },
+  /** PATCH body per action. */
+  actionPayload: {
+    delete: { is_visible: false },
+    archive: { is_archived: true },
+    unarchive: { is_archived: false },
+  },
 
   /** Delay between deletions (ms). */
   throttleMs: 500,
@@ -68,7 +74,8 @@ export const CONFIG = {
       'button[aria-haspopup="menu"]',
     ],
     menuItem: '[role="menuitem"]',
-    deleteMenuItemText: /^delete$/i,
+    /** Row-menu item per action (unarchive has no sidebar menu item). */
+    menuItemText: { delete: /^delete$/i, archive: /^archive$/i },
     confirmDeleteButton: [
       '[data-testid="delete-conversation-confirm-button"]',
       '[role="dialog"] button.btn-danger',

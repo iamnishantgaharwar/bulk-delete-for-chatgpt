@@ -27,6 +27,8 @@ Then open `chrome://extensions`, turn on **Developer mode**, click **Load unpack
 
 **Manage chats window:** the **Manage chats** button at the top right opens a large window listing your whole chat history, not just the chats loaded in the sidebar. Titles are shown in full, with each chat's last-updated date. You can search, filter by age (older than a week, 30 days, 3 months or a year), sort, select (click, Shift-click, **Select all**, or Ctrl/⌘+A) and delete. Deleting uses the same confirm window and background deletion as the sidebar.
 
+**Archive instead of delete:** wherever there's a Delete button there's also **Archive**. Archived chats leave the sidebar but aren't deleted, so the confirm window doesn't ask you to type anything. When a run finishes, **Undo archive** restores what was just archived. The **Archived** tab in Manage chats lists every archived chat so you can **Unarchive** it or delete it for good. Archive and delete jobs can be queued together, and the summary counts each separately.
+
 Esc exits select mode. You can switch the extension on or off from its toolbar popup.
 
 **Appearance:** click **Customize appearance** in the popup, or right-click the toolbar icon and choose **Options**. You can pick a preset (Classic, Ocean, Forest, Grape, Sunset, Minimal) or set your own accent colour, Delete-button colour and corner style (Sharp, Rounded or Pill). A live preview shows the result in light and dark mode, and changes apply immediately to any open ChatGPT tab.
@@ -49,6 +51,7 @@ Esc exits select mode. You can switch the extension on or off from its toolbar p
 | `src/pages/pages.css` | Tailwind entry for the popup and settings page |
 | `src/background.ts` | Sets defaults on install |
 
+- **Actions:** each queued chat carries its action. `PATCH /backend-api/conversation/<id>` is sent with `{"is_visible": false}` to delete, `{"is_archived": true}` to archive and `{"is_archived": false}` to unarchive. The archived list is the same list request with `&is_archived=true`.
 - **Deletion:** `PATCH /backend-api/conversation/<id>` with `{"is_visible": false}`, authenticated with the page's own session token. The token is fetched from `/api/auth/session` and kept only in memory. This is the request ChatGPT's own Delete button has been seen to send. **Check it against live network traffic before each release.** If the request fails with a non-retryable error, the extension tries clicking through the row's ⋯ → Delete → Confirm instead.
 - **Safety:** chats are deleted only by the conversation IDs captured when you selected them. Requests go one at a time with a 500 ms gap. HTTP 429 and 5xx get exponential backoff (and `Retry-After` is honored). On 401/403 the run pauses and asks you to reload.
 - **Chat list:** the manager loads your history with `GET /backend-api/conversations?offset&limit&order=updated`, the same paginated request ChatGPT's sidebar uses. It fetches 100 per page with a 300 ms pause between pages, and skips archived and project chats. If that request fails, it falls back to the chats in the sidebar. Like the delete request, this endpoint isn't documented, so check it against live traffic.
