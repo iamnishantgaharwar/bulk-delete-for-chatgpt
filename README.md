@@ -75,6 +75,10 @@ Esc exits select mode. You can switch the extension on or off from its toolbar p
 
 No analytics, no servers. See [PRIVACY.md](PRIVACY.md).
 
+## Author
+
+Made by [Nishant Gaharwar](https://github.com/iamnishantgaharwar).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

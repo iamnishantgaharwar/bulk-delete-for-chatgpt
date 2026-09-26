@@ -2,6 +2,11 @@
 
 All notable changes to Bulk Delete for ChatGPT. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- A "Made by Nishant Gaharwar" credit in the popup footer and on the settings page.
+
 ## [1.1.0] - 2026-09-26
 
 ### Added
