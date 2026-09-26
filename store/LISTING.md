@@ -21,6 +21,7 @@ HOW IT WORKS
 3. Click Delete, check the list of titles, and confirm.
 
 FEATURES
+• A "Manage chats" window listing your whole history with full titles and dates, including search, "older than…" filters and sorting
 • Checkboxes on every chat in the sidebar
 • Shift-click to select a range of chats
 • Filter chats by title and select all matches

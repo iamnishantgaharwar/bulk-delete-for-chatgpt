@@ -1,6 +1,8 @@
 import { CONFIG, queryFirst } from '../config';
+import type { ChatSummary } from './api';
 import { runDeletion, type ChatRef, type FailedChat, type RunResult } from './deleter';
 import { btn, h, icon, shadowHost } from './dom';
+import { ChatManager } from './manager';
 import { clearQueue, loadStaleQueue, saveQueue } from './queue-store';
 import { currentChatId, findScrollContainer, getChatRows, rowElement, sidebarNav, type ChatRow } from './sidebar';
 import { GLOBAL_CSS } from './styles';
@@ -58,6 +60,7 @@ export class BulkDeleteApp {
   private filterClearBtn!: HTMLButtonElement;
   private modalLayer!: HTMLDivElement;
   private panel!: HTMLDivElement;
+  private manager!: ChatManager;
 
   // ---- lifecycle ----------------------------------------------------------
 
@@ -181,8 +184,28 @@ export class BulkDeleteApp {
       'aria-live': 'polite',
       hidden: true,
     });
-    this.modalLayer = h('div');
-    root.append(this.bar, this.panel, this.modalLayer);
+    const managerBtn = h('button', {
+      class: `${btn.secondary} fixed z-[2147483000] shadow-float`,
+      style: `top:${CONFIG.managerButton.top};right:${CONFIG.managerButton.right}`,
+      title: 'See all chats with full titles and delete in bulk',
+      onclick: () => this.openManager(),
+    }, icon('list', 'size-4'), 'Manage chats');
+    const managerLayer = h('div');
+    this.modalLayer = h('div'); // after the manager, so the confirm window stacks on top of it
+    root.append(managerBtn, this.bar, this.panel, managerLayer, this.modalLayer);
+    this.manager = new ChatManager(managerLayer, {
+      isPending: (id) => this.runQueue.some((c) => c.id === id),
+      isDeleted: (id) => this.deletedIds.has(id),
+      sidebarChats: (): ChatSummary[] =>
+        getChatRows()
+          .filter((r) => r.eligible)
+          .map((r) => ({ id: r.id, title: r.title, updatedAt: null, createdAt: null })),
+      requestDelete: (chats) =>
+        this.openConfirm(chats, () => {
+          this.manager.close();
+          this.enqueue(chats);
+        }),
+    });
     document.body.append(host);
   }
 
@@ -456,21 +479,28 @@ export class BulkDeleteApp {
     this.toggleChat(id, row?.title ?? 'Untitled chat', e.shiftKey);
   };
 
+  private openManager() {
+    if (this.selectMode) this.setSelectMode(false);
+    this.manager.open();
+  }
+
   private onKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       if (this.confirmOpen) this.closeConfirm();
+      else if (this.manager.isOpen) this.manager.close();
       else if (this.selectMode) this.setSelectMode(false);
       else return;
       e.preventDefault();
       e.stopPropagation();
       return;
     }
-    if (this.selectMode && !this.confirmOpen && (e.key === 'a' || e.key === 'A') && (e.metaKey || e.ctrlKey)) {
+    if ((this.selectMode || this.manager.isOpen) && !this.confirmOpen && (e.key === 'a' || e.key === 'A') && (e.metaKey || e.ctrlKey)) {
       const origin = e.composedPath()[0] as HTMLElement | undefined;
       if (origin && (origin.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(origin.tagName))) return;
       e.preventDefault();
       e.stopPropagation();
-      this.selectAllVisible();
+      if (this.manager.isOpen) this.manager.selectAllShown();
+      else this.selectAllVisible();
     }
   };
 
@@ -493,8 +523,17 @@ export class BulkDeleteApp {
     this.confirmOpen = false;
   }
 
-  private openConfirm() {
-    const queue = [...this.selected].map(([id, title]) => ({ id, title }));
+  /**
+   * Confirm window for deleting `queue` (defaults to the sidebar selection).
+   * `onConfirmed` defaults to leaving select mode and queueing the chats.
+   */
+  private openConfirm(
+    queue: ChatRef[] = [...this.selected].map(([id, title]) => ({ id, title })),
+    onConfirmed: () => void = () => {
+      this.setSelectMode(false); // hand the sidebar back so ChatGPT can be used during the run
+      this.enqueue(queue);
+    },
+  ) {
     if (!queue.length) return;
     this.confirmOpen = true;
     const n = queue.length;
@@ -504,8 +543,7 @@ export class BulkDeleteApp {
       disabled: typed,
       onclick: () => {
         this.closeConfirm();
-        this.setSelectMode(false); // hand the sidebar back so ChatGPT can be used during the run
-        this.enqueue(queue);
+        onConfirmed();
       },
     }, `Delete ${plural(n, 'chat')}`);
     const cancelBtn = h('button', { class: btn.secondary, onclick: () => this.closeConfirm() }, 'Cancel');
@@ -584,6 +622,7 @@ export class BulkDeleteApp {
     this.runQueue.push(...fresh);
     void saveQueue(this.runQueue);
     this.refresh();
+    this.manager.refresh();
     if (this.running) this.renderRunning();
     else void this.startRun();
   }
@@ -611,12 +650,14 @@ export class BulkDeleteApp {
         this.selected.delete(chat.id);
         void saveQueue(this.runQueue);
         this.refresh();
+        this.manager.refresh();
         this.renderRunning();
       },
       onFailed: (chat) => {
         this.runDone++;
         this.runFailed.push(chat);
         void saveQueue(this.runQueue);
+        this.manager.refresh();
         this.renderRunning();
       },
     });

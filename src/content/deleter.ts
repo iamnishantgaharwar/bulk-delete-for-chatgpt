@@ -1,4 +1,5 @@
 import { CONFIG, queryFirst } from '../config';
+import { SessionExpiredError, getAccessToken } from './api';
 import { findLinkById } from './sidebar';
 
 export interface ChatRef {
@@ -26,25 +27,11 @@ export interface RunHooks {
   isCancelled(): boolean;
 }
 
-class SessionExpiredError extends Error {}
 class RetryableError extends Error {}
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ---- Method A: the same web request ChatGPT's own UI sends -----------------
-
-// Held in memory only; never stored or logged.
-let accessToken: string | null = null;
-
-async function getAccessToken(force = false): Promise<string> {
-  if (accessToken && !force) return accessToken;
-  const res = await fetch(CONFIG.endpoints.session, { credentials: 'include' });
-  if (!res.ok) throw new Error(`Session lookup failed (HTTP ${res.status})`);
-  const data = (await res.json().catch(() => ({}))) as { accessToken?: string };
-  if (!data.accessToken) throw new SessionExpiredError('Not signed in');
-  accessToken = data.accessToken;
-  return accessToken;
-}
 
 async function deleteViaApi(id: string): Promise<void> {
   let refreshed = false;

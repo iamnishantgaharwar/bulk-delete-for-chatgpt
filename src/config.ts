@@ -9,7 +9,12 @@ export const CONFIG = {
   endpoints: {
     session: '/api/auth/session',
     conversation: (id: string) => `/backend-api/conversation/${encodeURIComponent(id)}`,
+    /** The paginated list ChatGPT's sidebar itself loads (newest first). */
+    conversations: (offset: number, limit: number) =>
+      `/backend-api/conversations?offset=${offset}&limit=${limit}&order=updated`,
   },
+  /** Project chats are out of scope for v1; the list API tags them with a g-p-* gizmo id. */
+  isProjectConversation: (gizmoId: string | null | undefined) => !!gizmoId && gizmoId.startsWith('g-p-'),
   deletePayload: { is_visible: false },
 
   /** Delay between deletions (ms). */
@@ -18,6 +23,14 @@ export const CONFIG = {
   maxRetries: 4,
   backoffBaseMs: 1000,
   backoffMaxMs: 30_000,
+
+  /** Where the "Manage chats" button sits — below ChatGPT's header so it doesn't cover its buttons. */
+  managerButton: { top: '64px', right: '20px' },
+  /** Chat manager: page size and pause between pages when loading the full history. */
+  listPageSize: 100,
+  listPageDelayMs: 300,
+  /** Safety cap on history loading (pages × page size). */
+  listMaxPages: 100,
 
   /** A saved queue whose tab hasn't reported in this long is offered for resume. */
   queueHeartbeatMs: 3000,
