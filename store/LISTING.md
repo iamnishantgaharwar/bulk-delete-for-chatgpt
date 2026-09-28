@@ -5,7 +5,7 @@
 **Name:** Bulk Delete for ChatGPT
 
 **Summary (≤132 chars):**
-Select many ChatGPT chats in the sidebar and delete them in one step. Runs locally, collects nothing. Not affiliated with OpenAI.
+Bulk delete or archive ChatGPT chats. See your full history with dates, filter and select. Runs locally. Not affiliated with OpenAI.
 
 **Category:** Productivity  **Language:** English
 
@@ -13,36 +13,40 @@ Select many ChatGPT chats in the sidebar and delete them in one step. Runs local
 
 Clean up your ChatGPT history in seconds instead of clicking through chats one at a time.
 
-ChatGPT lets you delete chats one by one, or delete everything at once. Bulk Delete for ChatGPT lets you pick exactly which chats to remove and deletes them together.
+ChatGPT only lets you delete chats one by one, or wipe everything at once. Bulk Delete for ChatGPT lets you pick exactly which chats to remove, then deletes or archives them together in the background while you keep chatting.
 
 HOW IT WORKS
-1. Click "Bulk delete chats" at the top of the ChatGPT sidebar.
-2. Tick the chats you want to remove. Shift-click selects a range; "Select all visible" ticks everything.
-3. Click Delete, check the list of titles, and confirm.
+1. Click "Select chats" at the top of the ChatGPT sidebar, or "Manage chats" at the top right to see your whole history.
+2. Tick the chats you want to remove. Shift-click selects a range, and "Select all" ticks everything shown.
+3. Click Delete or Archive, check the list, and confirm.
+
+WHAT'S NEW IN 1.1
+• Manage chats window: your whole history, not just what's loaded in the sidebar, with full titles and dates
+• Search chats, filter by age (for example "older than 30 days") and sort
+• Archive instead of delete: chats leave the sidebar but can be restored, with a one-click Undo
+• Archived view to unarchive chats or delete them for good
+• Appearance settings: presets or your own accent colour, Delete-button colour and corner style
+• A cleaner design that matches ChatGPT's light and dark mode
 
 FEATURES
-• A "Manage chats" window listing your whole history with full titles and dates, including search, "older than…" filters and sorting
-• Archive instead of delete (reversible), with Undo and an Archived view to restore chats
 • Checkboxes on every chat in the sidebar
 • Shift-click to select a range of chats
-• Filter chats by title and select all matches
-• "Load older chats" to reach older history
-• Runs in the background while you keep using ChatGPT
-• A progress panel with Cancel, plus a summary with retry for any failures
+• Filter by title and select all matches
+• Load older chats with one click
+• Delete and archive jobs run in the background while you keep using ChatGPT
+• Progress panel with Cancel, and a summary with Retry for anything that failed
 • If you close the tab mid-run, you can resume or discard the rest next time
-• A confirmation window lists every chat before anything is deleted, and large batches need a typed confirmation
-• Follows ChatGPT's light and dark mode
-• Customise the look with presets or your own accent colour, Delete-button colour and corner style
+• A confirmation window lists every chat first, and deleting more than 20 chats requires typing DELETE
 
 PRIVACY
-• Runs entirely in your browser: no servers and no analytics
-• Talks only to chatgpt.com, using your existing session
+• Runs entirely in your browser: no servers, no analytics, no tracking
+• Talks only to chatgpt.com, using your existing signed-in session
 • Only asks for access to chatgpt.com
 • Open source: https://github.com/iamnishantgaharwar/bulk-delete-for-chatgpt
 
-Deleted chats can't be recovered, so check the confirmation list before you confirm.
+Deleted chats can't be recovered. If you're unsure, archive them instead.
 
-Independent project, not affiliated with, endorsed by, or sponsored by OpenAI. ChatGPT is a trademark of OpenAI.
+Made by Nishant Gaharwar. Independent project, not affiliated with, endorsed by, or sponsored by OpenAI. ChatGPT is a trademark of OpenAI.
 
 **Assets needed:**
 - Screenshots 1280×800 (1–5). Use a test account with no real chat titles. Suggested shots: select mode with checkboxes, the confirm window, the background progress panel, the summary.
